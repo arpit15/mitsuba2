@@ -22,6 +22,7 @@ MTS_PY_DECLARE(AnimatedTransform);
 MTS_PY_DECLARE(vector);
 MTS_PY_DECLARE(warp);
 MTS_PY_DECLARE(xml);
+MTS_PY_DECLARE(PluginManager);
 
 #define MODULE_NAME MTS_MODULE_NAME(core, MTS_VARIANT_NAME)
 
@@ -265,6 +266,7 @@ PYBIND11_MODULE(MODULE_NAME, m) {
     MTS_PY_IMPORT(Hierarchical2D);
     MTS_PY_IMPORT(Marginal2D);
     MTS_PY_IMPORT(vector);
+    MTS_PY_IMPORT(PluginManager);
     MTS_PY_IMPORT_SUBMODULE(warp);
     MTS_PY_IMPORT_SUBMODULE(xml);
 
