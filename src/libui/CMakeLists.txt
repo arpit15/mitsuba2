@@ -43,7 +43,8 @@ set_target_properties(mitsuba-ui-obj mitsuba-ui PROPERTIES FOLDER mitsuba-ui)
 target_compile_definitions(mitsuba-ui-obj PRIVATE -DMTS_BUILD_MODULE=MTS_MODULE_UI ${NANOGUI_EXTRA_DEFS})
 
 # Link to Mitsuba core library
-target_link_libraries(mitsuba-ui PUBLIC mitsuba-core)
+target_link_libraries(mitsuba-ui PUBLIC mitsuba-core 
+    PRIVATE mitsuba-render tbb)
 
 # Link to NanoGUI
 target_link_libraries(mitsuba-ui PUBLIC nanogui)

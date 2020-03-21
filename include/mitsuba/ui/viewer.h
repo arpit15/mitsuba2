@@ -15,13 +15,17 @@ public:
     struct Tab;
 
     /// Create a new viewer interface
-    MitsubaViewer();
+    MitsubaViewer(std::string mode);
 
     /// Append an empty tab
     Tab *append_tab(const std::string &caption);
 
     /// Load content (a scene or an image) into a tab
     void load(Tab *tab, const fs::path &scene);
+    template <typename Float, typename Spectrum>
+    void render();
+    template <typename Float, typename Spectrum>
+    void reload();
 
     using ng::Screen::perform_layout;
     virtual void perform_layout(NVGcontext* ctx) override;
@@ -31,13 +35,14 @@ protected:
     void close_tab_impl(Tab *tab);
 
 protected:
-    ng::ref<ng::Button> m_btn_play, m_btn_stop, m_btn_reload;
+    ng::ref<ng::Button> m_btn_open, m_btn_play, m_btn_stop, m_btn_reload;
     ng::ref<ng::PopupButton> m_btn_menu, m_btn_settings;
     ng::ref<ng::Widget> m_contents, m_progress_panel;
     ng::ref<ng::ProgressBar> m_progress_bar;
     ng::ref<ng::TabWidgetBase> m_tab_widget;
     ng::ref<ng::ImageView> m_view;
     std::vector<Tab *> m_tabs;
+    std::string m_mode;
 };
 
 NAMESPACE_END(mitsuba)

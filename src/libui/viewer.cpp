@@ -6,6 +6,9 @@
 #include <mitsuba/core/fstream.h>
 #include <mitsuba/core/fresolver.h>
 #include <mitsuba/core/formatter.h>
+#include <mitsuba/render/integrator.h>
+#include <mitsuba/render/scene.h>
+#include <mitsuba/core/xml.h>
 
 #include <nanogui/layout.h>
 #include <nanogui/label.h>
@@ -37,14 +40,18 @@ struct MitsubaViewer::Tab {
     int id = 0;
     ng::ref<ng::VScrollPanel> console_panel;
     ng::ref<ng::TextArea> console;
+    ng::ref<ng::ImageView> view;
     std::vector<Layer> layers;
+    ref<mitsuba::Object> scene;
+    fs::path fname;
 };
 
-MitsubaViewer::MitsubaViewer()
+MitsubaViewer::MitsubaViewer(std::string mode)
     : ng::Screen(ng::Vector2i(1024, 768), "Mitsuba 2",
                  /* resizable */ true, /* fullscreen */ false,
                  /* depth_buffer */ true, /* stencil_buffer */ true,
-                 /* float_buffer */ true) {
+                 /* float_buffer */ true),
+    m_mode(mode) {
     using namespace nanogui;
 
     inc_ref();
@@ -70,7 +77,25 @@ MitsubaViewer::MitsubaViewer()
     menu->set_layout(new GroupLayout());
     menu->set_visible(true);
     menu->set_size(ng::Vector2i(200, 140));
-    new Button(menu, "Open ..", FA_FOLDER_OPEN);
+    m_btn_open = new Button(menu, "Open ..", FA_FOLDER_OPEN);
+
+    m_btn_open->set_callback([&] { 
+        std::string fn = file_dialog( { {"xml", "Scene format"}}, false);
+        std::cout << fn << std::endl;
+        // Log(Info, fn); 
+        filesystem::path filename(fn);
+        MitsubaViewer::Tab *tab = append_tab(filename.filename());
+        fs::path scene_dir = filename.parent_path();
+        ref<FileResolver> fr2 = new FileResolver();
+        if (!fr2->contains(scene_dir))
+            fr2->append(scene_dir);
+
+        Thread *thread = Thread::thread();
+        thread->set_file_resolver(fr2);
+        load(tab, fr2->resolve(filename));
+
+    });
+    // TODO: add pop up and file path getter for open
     PopupButton *recent = new PopupButton(menu, "Open Recent");
     auto recent_popup = recent->popup();
     recent_popup->set_layout(new GroupLayout());
@@ -98,10 +123,11 @@ MitsubaViewer::MitsubaViewer()
 
     m_btn_play = new Button(tools, "", FA_PLAY);
     m_btn_play->set_text_color(nanogui::Color(100, 255, 100, 150));
-    m_btn_play->set_callback([this]() {
+    m_btn_play->set_callback([this, mode]() {
             m_btn_play->set_icon(FA_PAUSE);
             m_btn_play->set_text_color(nanogui::Color(255, 255, 255, 150));
             m_btn_stop->set_enabled(true);
+            MTS_INVOKE_VARIANT(mode, render);
         }
     );
     m_btn_play->set_tooltip("Render");
@@ -113,6 +139,9 @@ MitsubaViewer::MitsubaViewer()
 
     m_btn_reload = new Button(tools, "", FA_SYNC_ALT);
     m_btn_reload->set_tooltip("Reload file");
+    m_btn_reload->set_callback([this, mode]() {
+        MTS_INVOKE_VARIANT(mode, reload);
+    });
 
     m_btn_settings = new PopupButton(tools, "", FA_COG);
     m_btn_settings->set_tooltip("Scene configuration");
@@ -236,6 +265,62 @@ MitsubaViewer::MitsubaViewer()
     m_view->reset();
 }
 
+template <typename Float, typename Spectrum>
+void MitsubaViewer::render() {
+    auto tab_id = m_tab_widget->selected_id();
+    Log(Info, "Selected tab %d", tab_id);
+    auto tab = m_tabs[tab_id];
+    auto *scene = dynamic_cast<Scene<Float, Spectrum> *>(tab->scene.get());
+    auto integrator = scene->integrator();
+    auto sensors = scene->sensors();
+    auto film = sensors[0]->film();
+    auto sceneName = tab->fname.string();
+    std::string imgName = sceneName.replace(sceneName.find("xml"), sizeof("xml") -1, "exr");
+    Log(Info, "Rendered image is stored at %s",imgName);
+    film->set_destination_file(imgName);
+    
+    bool success = integrator->render(scene, sensors[0].get());
+    if(success) {
+        film->develop();
+        auto bmp = film->bitmap(true);
+        auto rgb = bmp->convert(Bitmap::PixelFormat::RGB, Struct::Type::UInt8, true);
+        
+        tab->layers.emplace_back("RGB", rgb);
+        tab->console_panel->set_visible(false);
+        tab->view->set_image(new mitsuba::GPUTexture(rgb, mitsuba::GPUTexture::InterpolationMode::Trilinear,
+                                       mitsuba::GPUTexture::InterpolationMode::Nearest));
+        
+        tab->view->center();   
+        Log(Info, "Num of layers in tab :%d", tab->layers.size());
+
+    }
+    else
+        Log(Warn, "Integrator failed!!");
+    
+}
+
+template <typename Float, typename Spectrum>
+void MitsubaViewer::reload() {
+    // reload a scene
+    auto tab_id = m_tab_widget->selected_id();
+    auto tab = m_tabs[tab_id];
+    
+    tab->layers.erase(tab->layers.begin());
+    // load new scene
+    auto scene_dir = tab->fname.parent_path();
+    Log(Info, "Reloading %s", tab->fname.string());
+    ref<FileResolver> fr = new FileResolver();
+    if (!fr->contains(scene_dir))
+        fr->append(scene_dir);
+
+    Thread *thread = Thread::thread();
+    thread->set_file_resolver(fr);
+
+    tab->scene = xml::load_file(tab->fname, m_mode);
+    Log(Info, "scene ref count after adding :%d", tab->scene->ref_count());
+    render<Float, Spectrum>();
+}
+
 class TabAppender : public Appender {
 public:
     TabAppender(MitsubaViewer *viewer, MitsubaViewer::Tab *tab)
@@ -283,6 +368,11 @@ MitsubaViewer::Tab *MitsubaViewer::append_tab(const std::string &name) {
     tab->console->set_font_size(14);
     tab->console->set_font("mono");
     tab->console->set_foreground_color(ng::Color(0.8f, 1.f));
+    tab->view = new ng::ImageView(m_tab_widget);
+    tab->view->set_draw_border(false);
+    tab->view->set_layout(new ng::BoxLayout(ng::Orientation::Vertical,
+                                    ng::Alignment::Fill));
+    tab->view->set_position({});
     m_tab_widget->set_background_color(ng::Color(0.1f, 1.f));
     tab->id = m_tab_widget->append_tab(name);
     m_tab_widget->set_selected_id(tab->id);
@@ -301,18 +391,22 @@ void MitsubaViewer::load(Tab *tab, const fs::path &fname) {
         logger->set_formatter(new DefaultFormatter());
         Thread::thread()->set_logger(logger);
 
+        // load the scene
+        tab->fname = fname;
+        tab->scene = xml::load_file(fname, m_mode);
+
         ref<FileStream> stream = new FileStream(fname);
         Bitmap::FileFormat file_format = Bitmap::detect_file_format(stream);
 
-        if (file_format != Bitmap::FileFormat::Unknown) {
-            ref<Bitmap> bitmap = new Bitmap(stream, file_format);
-            std::vector<std::pair<std::string, ref<Bitmap>>> images = bitmap->split();
+    //     if (file_format != Bitmap::FileFormat::Unknown) {
+    //         ref<Bitmap> bitmap = new Bitmap(stream, file_format);
+    //         std::vector<std::pair<std::string, ref<Bitmap>>> images = bitmap->split();
 
-            ng::async([tab, images = std::move(images)]() mutable {
-                for (auto &kv: images)
-                    tab->layers.emplace_back(kv.first, kv.second);
-            });
-        }
+    //         ng::async([tab, images = std::move(images)]() mutable {
+    //             for (auto &kv: images)
+    //                 tab->layers.emplace_back(kv.first, kv.second);
+    //         });
+    //     }
     } catch (const std::exception &e) {
         Log(Warn, "A critical exception occurred: %s", e.what());
     }
@@ -341,6 +435,8 @@ void MitsubaViewer::perform_layout(NVGcontext* ctx) {
             console_panel->set_size(size);
             console_panel->perform_layout(ctx);
             console_panel->request_focus();
+            tab->view->set_size(size);
+            tab->view->set_position(position);
         } else {
             console_panel->set_visible(false);
         }
@@ -354,6 +450,8 @@ bool MitsubaViewer::keyboard_event(int key, int scancode, int action, int modifi
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         set_visible(false);
         return true;
+    } else if(action == GLFW_PRESS && key == GLFW_KEY_R) {
+        MTS_INVOKE_VARIANT(m_mode, reload);
     }
     return false;
 }

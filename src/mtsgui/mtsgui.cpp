@@ -71,7 +71,7 @@ int main(int argc, char *argv[]) {
     auto arg_threads = parser.add(StringVec{ "-t", "--threads" }, true);
     auto arg_verbose = parser.add(StringVec{ "-v", "--verbose" }, false);
     auto arg_define  = parser.add(StringVec{ "-D", "--define" }, true);
-    // auto arg_mode    = parser.add(StringVec{ "-m", "--mode" }, true);
+    auto arg_mode    = parser.add(StringVec{ "-m", "--mode" }, true);
     auto arg_help    = parser.add(StringVec{ "-h", "--help" });
     // auto arg_update  = parser.add(StringVec{ "-u", "--update" }, false);
     auto arg_extra   = parser.add("", true);
@@ -100,6 +100,8 @@ int main(int argc, char *argv[]) {
             arg_define = arg_define->next();
         }
 
+        std::string mode = (*arg_mode ? arg_mode->as_string() : MTS_DEFAULT_VARIANT);
+
         // Initialize Intel Thread Building Blocks with the requested number of threads
         if (*arg_threads)
             __global_thread_count = arg_threads->as_int();
@@ -120,7 +122,7 @@ int main(int argc, char *argv[]) {
             ng::init();
 
             /* main loop */ {
-                ng::ref<MitsubaViewer> viewer = new MitsubaViewer();
+                ng::ref<MitsubaViewer> viewer = new MitsubaViewer(mode);
                 viewer->dec_ref();
 
                 // Initialize profiler *after* NanoGUI
