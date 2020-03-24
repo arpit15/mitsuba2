@@ -37,6 +37,7 @@ MTS_PY_EXPORT(Properties) {
         .SET_ITEM_BINDING(long, int64_t)
         .SET_ITEM_BINDING(string, std::string)
         .SET_ITEM_BINDING(vector3f, typename Properties::Vector3f)
+        // .SET_ITEM_BINDING(point3f, typename Properties::Point3f)
         .SET_ITEM_BINDING(transform, typename Properties::Transform4f)
         .SET_ITEM_BINDING(animated_transform, ref<AnimatedTransform>)
         .SET_ITEM_BINDING(object, ref<Object>)

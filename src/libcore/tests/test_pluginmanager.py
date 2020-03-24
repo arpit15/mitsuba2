@@ -20,3 +20,13 @@ def test02_plugin_loaded(variant_scalar_rgb):
   inst = PluginManager.instance()
   plugin_list = inst.loaded_plugins()
   assert(3 == len(plugin_list))
+
+def test03_create_object(variant_scalar_rgb):
+  from mitsuba.core import PluginManager, Properties
+  from mitsuba.render import Scene
+
+  pgmr = PluginManager.instance()
+  props = Properties("scene")
+  obj = Scene(Properties())
+  obj1 = pgmr.create_object(props, obj.class_())
+  assert type(obj1) is Scene
