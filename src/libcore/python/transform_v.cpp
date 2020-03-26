@@ -113,6 +113,7 @@ MTS_PY_EXPORT(Transform) {
             .def("has_scale", &Transform4f::has_scale, D(Transform, has_scale))
             .def_readwrite("matrix", &Transform4f::matrix)
             .def_readwrite("inverse_transpose", &Transform4f::inverse_transpose)
+            .def("translation", &Transform4f::translation)
             .def_repr(Transform4f);
 
         bind_slicing_operators<Transform4f, ScalarTransform4f>(trans4);
