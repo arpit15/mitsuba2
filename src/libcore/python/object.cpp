@@ -30,8 +30,7 @@ public:
 };
 
 MTS_PY_EXPORT(Object) {
-    py::class_<Class>(m, "Class", D(Class))
-        .def_method(Class, parent, py::return_value_policy::reference);
+    py::class_<Class>(m, "Class", D(Class));
 
     py::class_<TraversalCallback, PyTraversalCallback>(m, "TraversalCallback")
         .def(py::init<>());
