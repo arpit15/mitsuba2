@@ -5,7 +5,7 @@
 /// Trampoline for derived types implemented in Python
 MTS_VARIANT class PyEmitter : public Emitter<Float, Spectrum> {
 public:
-    MTS_IMPORT_TYPES(Emitter)
+    MTS_IMPORT_TYPES(Emitter, Shape)
 
     PyEmitter(const Properties &props) : Emitter(props) { }
 
@@ -42,6 +42,10 @@ public:
 
     std::string to_string() const override {
         PYBIND11_OVERLOAD_PURE(std::string, Emitter, to_string,);
+    }
+
+    void set_shape(Shape * shape) override {
+        PYBIND11_OVERLOAD_PURE(void, Emitter, set_shape, shape);
     }
 };
 
