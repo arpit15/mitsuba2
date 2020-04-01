@@ -80,13 +80,7 @@ void parse_spectrum(PluginManager &pgmr, Properties &prop, py::dict &dict, bool 
     } else if(key.compare("value") == 0) {
       py::print("parsing value:", item.second);
       has_value = true;
-      if (isinstance<ref<Object>>(item.second)) {
-        py::print("adding already created tex obj");
-        auto obj = item.second.cast<ref<Object>>();
-        prop.set_object(spec_name, obj);
-        return;
-      }
-      else if(isinstance<py::float_>(item.second)) {
+      if(isinstance<py::float_>(item.second) || isinstance<py::int_>(item.second)) {
         py::print("got constant value");
         is_constant = true;
         Properties nested_prop("uniform");
