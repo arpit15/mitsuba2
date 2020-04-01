@@ -49,6 +49,10 @@ point_emitter = pmgr.create({
     "emitter" : {
         "type" : "point",
         "to_world" : Transform4f.translate([2,-6,4]),
+        # "rgb" : {
+        #     "name" : "intensity",
+        #     "value" : [0.5, 0.2, 0.5] #10 #Texture.D65(10)
+        # }
         "spectrum" : {
             "name" : "intensity",
             "value" : Texture.D65(10)
@@ -58,7 +62,41 @@ point_emitter = pmgr.create({
 print(point_emitter)
 
 # check area emitters
-
+# primitive_shape = pmgr.create({
+#   "shape" : {
+#     "type" : "sphere",
+#     "center" : Point3f(0, 0, -10),
+#     "radius" : 10.0,
+#     "flip_normals" : False
+#   }
+#   })
+# print(primitive_shape)
 ####
+
+# bsdf = pmgr.create({
+#   "bsdf" : {
+#     "type"
+#   }
+#   })
+# print(bsdf)
+# ##3
+# sampler = pmgr.create({
+#   "sampler" : {
+#     "type" : "independent",
+#     "sample_count" : 4
+#   }
+# })
+# print(sampler)
+# ###
+# film = pmgr.create({
+#   "film" : {
+#     "type" : "hdrfilm",
+#     "high_quality_edges" : True,
+#     "rfilter" : {
+#       "type" : "box"
+#     }
+#   }
+# })
+# print(film)
 
 # set_trace()
