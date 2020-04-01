@@ -12,6 +12,21 @@ NAMESPACE_BEGIN(plugin)
 NAMESPACE_BEGIN(detail)
 using Float = float;
 
+/// Throws if non-whitespace characters are found after the given index.
+static void check_whitespace_only(const std::string &s, size_t offset) {
+    for (size_t i = offset; i < s.size(); ++i) {
+        if (!std::isspace(s[i]))
+            Throw("Invalid trailing characters in floating point number \"%s\"", s);
+    }
+}
+
+static Float stof(const std::string &s) {
+    size_t offset = 0;
+    Float result = std::stof(s, &offset);
+    check_whitespace_only(s, offset);
+    return result;
+}
+
 void parse_rgb(PluginManager &pgmr, Properties &prop, py::dict &dict, bool within_emitter = false, bool within_spectrum = false) {
   MTS_PY_IMPORT_TYPES()
   Properties::Color3f col;
@@ -45,31 +60,144 @@ void parse_rgb(PluginManager &pgmr, Properties &prop, py::dict &dict, bool withi
 
 void parse_spectrum(PluginManager &pgmr, Properties &prop, py::dict &dict, bool within_emitter = false) {
   MTS_PY_IMPORT_TYPES()
-  
+  bool has_value = false, has_filename = false, is_constant = false;
   std::string spec_name;
+  // for spectrum not constant
+  std::vector<Properties::Float> wavelengths, values;
   const Class *tex_cls = Class::for_name("Texture", mitsuba::detail::get_variant<Float, Spectrum >());
-  
   for(auto item : dict) {
     std::string key = item.first.cast<std::string>();
     py::print("key:", key, item.second);
     if(key.compare("name") == 0) {
       spec_name = item.second.cast<std::string>();
-    } 
-  }  
+    } else if(key.compare("filename") == 0) {
+      if(has_value)
+        Throw("'spectrum' requires one of \"value\" or \"filename\" attributes");
+      has_filename = true;
+      std::string filename = item.second.cast<std::string>();
+      std::vector<Float> wavelengths, values;
+      spectrum_from_file(filename, wavelengths, values);
+    } else if(key.compare("value") == 0) {
+      py::print("parsing value:", item.second);
+      has_value = true;
+      if (isinstance<ref<Object>>(item.second)) {
+        py::print("adding already created tex obj");
+        auto obj = item.second.cast<ref<Object>>();
+        prop.set_object(spec_name, obj);
+        return;
+      }
+      else if(isinstance<py::float_>(item.second)) {
+        py::print("got constant value");
+        is_constant = true;
+        Properties nested_prop("uniform");
+        ScalarFloat val = item.second.cast<float>();
+        if(within_emitter && is_spectral_v<Spectrum>) {
+          nested_prop.set_plugin_name("d65");
+          nested_prop.set_float("scale", val);
+        } else {
+          nested_prop.set_float("value", val);
+        }
+        ref<Object> obj = pgmr.create_object(nested_prop, tex_cls);
+        auto expanded = obj->expand();
+        if(!expanded.empty())
+          obj = expanded[0];
+        prop.set_object(spec_name, obj);
+        return;
+      } else if(isinstance<py::str>(item.second)) {
+        is_constant = false;
+        if(has_filename)
+          Throw("'spectrum' requires one of \"value\" or \"filename\" attributes");
+      
+        if (has_value) {
+          py::print("Creating for pair values");
+          std::vector<std::string> tokens = string::tokenize(item.second.cast<std::string>());
 
-  // creating uniform(1)
-  Properties nested_prop("uniform");
-  ScalarFloat val = 1;
-  if(within_emitter && is_spectral_v<Spectrum>) {
-    nested_prop.set_plugin_name("d65");
-    nested_prop.set_float("scale", val);
-  } else {
-    nested_prop.set_float("value", val);
+          for (const std::string &token : tokens) {
+            std::vector<std::string> pair = string::tokenize(token, ":");
+            if (pair.size() != 2)
+                Throw("invalid spectrum (expected wavelength:value pairs)");
+
+            Properties::Float wavelength, value;
+            try {
+                wavelength = mitsuba::plugin::detail::stof(pair[0]);
+                value = mitsuba::plugin::detail::stof(pair[1]);
+            } catch (...) {
+                Throw("could not parse wavelength:value pair: \"%s\"", token);
+            }
+
+            wavelengths.push_back(wavelength);
+            values.push_back(value);
+          }
+        }
+      }
+    }
   }
+
+  // scale and create
+  Properties::Float unit_conversion = 1.f;
+  if(within_emitter || !is_spectral_v<Spectrum>)
+    unit_conversion = MTS_CIE_Y_NORMALIZATION;
+
+  /* Detect whether wavelengths are regularly sampled and potentially
+     apply the conversion factor. */
+  bool is_regular = true;
+  Properties::Float interval = 0.f;
+  for (size_t n = 0; n < wavelengths.size(); ++n) {
+    values[n] *= unit_conversion;
+
+    if (n <= 0)
+        continue;
+
+    Properties::Float distance = (wavelengths[n] - wavelengths[n - 1]);
+    if (distance < 0.f)
+        Throw("wavelengths must be specified in increasing order");
+    if (n == 1)
+        interval = distance;
+    else if (std::abs(distance - interval) > math::Epsilon<Float>)
+        is_regular = false;
+  }
+
+  Properties nested_prop;
+  if(is_regular) {
+    nested_prop.set_plugin_name("regular");
+    nested_prop.set_long("size", wavelengths.size());
+    nested_prop.set_float("lambda_min", wavelengths.front());
+    nested_prop.set_float("lambda_max", wavelengths.back());
+    nested_prop.set_pointer("values", values.data());
+  } else {
+    nested_prop.set_plugin_name("irregular");
+    nested_prop.set_long("size", wavelengths.size());
+    nested_prop.set_pointer("wavelengths", wavelengths.data());
+    nested_prop.set_pointer("values", values.data());
+  }
+
   ref<Object> obj = pgmr.create_object(nested_prop, tex_cls);
-  auto expanded = obj->expand();
-  if(!expanded.empty())
-    obj = expanded[0];
+
+  // In non-spectral mode, pre-integrate against the CIE matching curves
+  if (is_spectral_v<Spectrum>) {
+
+    /// Spectral IOR values are unbounded and require special handling
+    bool is_ior = spec_name == "eta" || spec_name == "k" || spec_name == "int_ior" ||
+                  spec_name == "ext_ior";
+
+    Properties::Color3f color = spectrum_to_rgb(wavelengths, values, !(within_emitter || is_ior));
+
+    Properties props3;
+    if (is_monochromatic_v<Spectrum>) {
+        props3 = Properties("uniform");
+        props3.set_float("value", luminance(color));
+    } else {
+        props3 = Properties(within_emitter ? "srgb_d65" : "srgb");
+        props3.set_color("color", color);
+
+        if (!within_emitter && is_ior)
+            props3.set_bool("unbounded", true);
+    }
+
+    obj = PluginManager::instance()->create_object(
+        props3, tex_cls);
+  }
+
   prop.set_object(spec_name, obj);
 }
 
