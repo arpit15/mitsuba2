@@ -45,32 +45,41 @@ pmgr = PluginManager.instance()
 # })
 # print(mesh)
 
-point_emitter = pmgr.create({
-    "emitter" : {
-        "type" : "point",
-        "to_world" : Transform4f.translate([2,-6,4]),
-        # "rgb" : {
-        #     "name" : "intensity",
-        #     "value" : [0.5, 0.2, 0.5] #10 #Texture.D65(10)
-        # }
-        "spectrum" : {
-            "name" : "intensity",
-            "value" : Texture.D65(10)
-        }
-    }
-})
-print(point_emitter)
+# point_emitter = pmgr.create({
+#     "emitter" : {
+#         "type" : "point",
+#         "to_world" : Transform4f.translate([2,-6,4]),
+#         # "rgb" : {
+#         #     "name" : "intensity",
+#         #     "value" : [0.5, 0.2, 0.5] #10 #Texture.D65(10)
+#         # }
+#         "spectrum" : {
+#             "name" : "intensity",
+#             "value" : 10.0
+#         }
+#     }
+# })
+# print(point_emitter)
 
 # check area emitters
-# primitive_shape = pmgr.create({
-#   "shape" : {
-#     "type" : "sphere",
-#     "center" : Point3f(0, 0, -10),
-#     "radius" : 10.0,
-#     "flip_normals" : False
-#   }
-#   })
-# print(primitive_shape)
+primitive_shape = pmgr.create({
+  "shape" : {
+    "type" : "sphere",
+    "center" : Point3f(0, 0, -10),
+    "radius" : 10.0,
+    "flip_normals" : False,
+    "emitter" : {
+      "type" : "area",
+      "spectrum" : {
+        "name" : "radiance",
+        "value" : 10
+      }
+    }
+  }
+})
+
+print(primitive_shape)
+print(primitive_shape.is_emitter())
 ####
 
 # bsdf = pmgr.create({

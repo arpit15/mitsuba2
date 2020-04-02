@@ -7,6 +7,9 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wc++2a-extensions"
 
+using Caster = py::object(*)(const mitsuba::Object *);
+extern Caster cast_object;
+
 NAMESPACE_BEGIN(mitsuba)
 NAMESPACE_BEGIN(plugin)
 NAMESPACE_BEGIN(detail)
@@ -36,8 +39,7 @@ void parse_rgb(PluginManager &pgmr, Properties &prop, py::dict &dict, bool withi
     if(key.compare("name") == 0) {
       rgb_name = item.second.cast<std::string>();
     } else if(isinstance<Properties::Color3f>(item.second)) {
-      py::print("color key:", key, item.second);
-       col = item.second.cast<Properties::Color3f>();
+      col = item.second.cast<Properties::Color3f>();
     } 
   }
 
@@ -67,7 +69,6 @@ void parse_spectrum(PluginManager &pgmr, Properties &prop, py::dict &dict, bool 
   const Class *tex_cls = Class::for_name("Texture", mitsuba::detail::get_variant<Float, Spectrum >());
   for(auto item : dict) {
     std::string key = item.first.cast<std::string>();
-    py::print("key:", key, item.second);
     if(key.compare("name") == 0) {
       spec_name = item.second.cast<std::string>();
     } else if(key.compare("filename") == 0) {
@@ -78,10 +79,8 @@ void parse_spectrum(PluginManager &pgmr, Properties &prop, py::dict &dict, bool 
       std::vector<Float> wavelengths, values;
       spectrum_from_file(filename, wavelengths, values);
     } else if(key.compare("value") == 0) {
-      py::print("parsing value:", item.second);
       has_value = true;
       if(isinstance<py::float_>(item.second) || isinstance<py::int_>(item.second)) {
-        py::print("got constant value");
         is_constant = true;
         Properties nested_prop("uniform");
         ScalarFloat val = item.second.cast<float>();
@@ -103,7 +102,6 @@ void parse_spectrum(PluginManager &pgmr, Properties &prop, py::dict &dict, bool 
           Throw("'spectrum' requires one of \"value\" or \"filename\" attributes");
       
         if (has_value) {
-          py::print("Creating for pair values");
           std::vector<std::string> tokens = string::tokenize(item.second.cast<std::string>());
 
           for (const std::string &token : tokens) {
@@ -215,25 +213,18 @@ void create_properties(PluginManager &pgmr, Properties &prop, py::dict &dict, bo
       parse_spectrum(pgmr, prop, spec_dict, within_emitter);
 
     } else if(key.compare("to_world") == 0) {
-      // py::print("transform key:", key, item.second);
       prop.set_transform(key, item.second.cast<Properties::Transform4f>());
     } else if(isinstance<py::bool_>(item.second)) {
-      // py::print("key:", key, item.second);
       prop.set_bool(key, item.second.cast<bool>());
     } else if(isinstance<py::int_>(item.second)) {
-      // py::print("int key:", key, item.second);
       prop.set_long(key, item.second.cast<int64_t>());
     } else if(isinstance<py::float_>(item.second)) {
-      // py::print("float key:", key, item.second);
       prop.set_float(key, item.second.cast<Properties::Float>());
     } else if(isinstance<py::str>(item.second)) {
-      // py::print("string key:", key, item.second);
       prop.set_string(key, item.second.cast<std::string>());
     } else if(isinstance<Properties::Point3f>(item.second)) {
-      // py::print("point3f key:", key, item.second);
       prop.set_point3f(key, item.second.cast<Properties::Point3f>());
     } else if(isinstance<Properties::Vector3f>(item.second)) {
-      // py::print("vector3f key:", key, item.second);
       prop.set_vector3f(key, item.second.cast<Properties::Vector3f>());
     } else {
       // another plugin
@@ -281,6 +272,6 @@ MTS_PY_EXPORT(PluginManager) {
         mitsuba::plugin::detail::create_properties(pgmr, prop, nested_dict, within_emitter, within_spectrum);
       }
       const Class *class_ = Class::for_name(parent_class_name, mitsuba::detail::get_variant<Float, Spectrum>());
-      return pgmr.create_object(prop, class_);
+      return cast_object((ref<Object>)(pgmr.create_object(prop, class_)));
     }, py::return_value_policy::reference);
 }
