@@ -222,14 +222,20 @@ void create_properties(PluginManager &pgmr, Properties &prop, py::dict &dict, bo
 	MTS_PY_IMPORT_TYPES()
 	// get type
 	auto it = dict.begin();
-	if(!dict.contains("type"))
-		Error("Dict should contain type as a key");
-	std::string parent_class_name = py::str(dict["type"]);
+	Assert( strcmp(it.first.cast<py::str>(), "type"), "First dict key should be str 'type'");
+	std::string parent_class_name = it.second.cast<py::str>();
 	// iterate over next props
-	
+	it++;
 	// check for 
-	for(auto item : dict) {
+	for(auto item : it) {
 		std::string key = item.first.cast<std::string>();
+		// check if the val is dict
+		try {
+			auto val = item.second.cast<std::dict>();
+		} catch (...) {
+			throw std::runtime_error("only dict")
+		} 
+
 		if(key.compare("type") == 0) {
 			std::string plugin_name = item.second.cast<std::string>();
 			// capitalize the first letter
@@ -291,19 +297,21 @@ MTS_PY_EXPORT(PluginManager) {
 	.def_static_method(PluginManager, instance, py::return_value_policy::reference)
 	.def("create", [](PluginManager &pgmr, const py::dict dict) {
 		Properties prop;
-		std::string parent_class_name;
+		Assert(dict.size() == 1);
+		auto it = dict.begin();
+		std::string parent_class_name = it.first;
 		bool within_emitter = false, within_spectrum = false;
-		for(auto item : dict) {
-			parent_class_name = item.first.cast<std::string>();
-			if(parent_class_name.compare("emitter") == 0)
-			  within_emitter = true;
-			if(parent_class_name.compare("rfilter") == 0)
-			  parent_class_name = "reconstructionFilter";
-			// capitalize the first letter
-			parent_class_name[0] = std::toupper(parent_class_name[0]);
-			auto nested_dict = item.second.cast<py::dict>();
-			mitsuba::plugin::detail::create_properties(pgmr, prop, nested_dict, within_emitter, within_spectrum);
-	  	}
+		
+		if(parent_class_name.compare("emitter") == 0)
+		  within_emitter = true;
+		if(parent_class_name.compare("rfilter") == 0)
+		  parent_class_name = "reconstructionFilter";
+		// capitalize the first letter
+		parent_class_name[0] = std::toupper(parent_class_name[0]);
+		auto nested_dict = it.second.cast<py::dict>();
+		
+		mitsuba::plugin::detail::create_properties(pgmr, prop, nested_dict, within_emitter, within_spectrum);
+	  	
 	  	const Class *class_ = Class::for_name(parent_class_name, mitsuba::detail::get_variant<Float, Spectrum>());
 	  	return cast_object((ref<Object>)(pgmr.create_object(prop, class_)));
 	}, py::return_value_policy::reference);
