@@ -17,7 +17,7 @@ NAMESPACE_BEGIN(detail)
 // Helper macro
 #define SET_PROP(Type, Setter)                                      \
 	if (strcmp(typeid(T).name(), typeid(Type).name()) == 0) {       \
-		auto ptr = py::cast<Type>(value);								\
+		Type ptr = py::cast<Type>(value);								\
 		props.Setter(name, ptr);									\
 		return;														\
 	}
@@ -30,11 +30,11 @@ void set(Properties &props, const std::string &name, const T &value) {
     SET_PROP(int, set_int)
     SET_PROP(long, set_long)
     SET_PROP(float, set_float)
-    SET_PROP(Vector3f, set_vector3f)
-    SET_PROP(Point3f, set_point3f)
-    SET_PROP(Transform4f, set_transform)
+    // SET_PROP(Properties::Type::Vector3f, set_vector3f)
+    // SET_PROP(Point3f, set_point3f)
+    // SET_PROP(Transform4f, set_transform)
     SET_PROP(std::string, set_string)
-    
+
     // TODO: not sure about those two
     SET_PROP(ref<AnimatedTransform>, set_animated_transform)
     SET_PROP(ref<Object>, set_object)
@@ -226,12 +226,20 @@ void create_properties(PluginManager &pgmr, Properties &prop, py::dict &dict, bo
 	MTS_PY_IMPORT_TYPES()
 	// get type
 	auto it = dict.begin();
-	Assert( strcmp(it->first.cast<py::str>(), "type"), "First dict key should be str 'type'");
+	
+	auto key1 = it->first.cast<std::string>();
+
+	py::print("key ", key1);
+	if(key1.compare("type") != 0)
+		py::print("didn't obtain type ", key1);
+
+	Assert( key.compare("type") == 0, "First dict key should be str 'type'");
+	
 	std::string parent_class_name = it->second.cast<py::str>();
 	// iterate over next props
 	it++;
 	// check for 
-	for(auto item = it; it != dict.end();) {
+	for(auto item = it; it != dict.end(); it++) {
 		std::string key = item->first.cast<std::string>();
 		
 		if(key.compare("rgb") == 0) {
