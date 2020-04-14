@@ -231,17 +231,25 @@ void create_properties(PluginManager &pgmr, Properties &prop, py::dict &dict, bo
 		std::string key = item.first.cast<std::string>();
 		// check if the val is dict
 		try {
-			auto val = item.second.cast<std::dict>();
+			auto nested_dict = item.second.cast<std::dict>();
+			bool nested_within_emitter = false, nested_within_spectrum = false;
+			std::string parent_class_name = key;
+			if(parent_class_name.compare("emitter") == 0)
+			  	nested_within_emitter = true;
+			if(parent_class_name.compare("rfilter") == 0)
+				parent_class_name = "reconstructionFilter";
+			// capitalize the first letter
+			parent_class_name[0] = std::toupper(parent_class_name[0]);
+			Properties nested_prop;
+			create_properties(pgmr, nested_prop, nested_dict, nested_within_emitter, nested_within_spectrum);
+			const Class *class_ = Class::for_name(parent_class_name, mitsuba::detail::get_variant<Float, Spectrum >());
+			auto obj = pgmr.create_object(nested_prop, class_);
+			prop.set_object(key, obj);
 		} catch (...) {
 			throw std::runtime_error("only dict")
 		} 
 
-		if(key.compare("type") == 0) {
-			std::string plugin_name = item.second.cast<std::string>();
-			// capitalize the first letter
-			plugin_name[0] = std::toupper(plugin_name[0]);
-			prop.set_plugin_name(plugin_name);
-		} else if(key.compare("rgb") == 0) {
+		if(key.compare("rgb") == 0) {
 			// parse spectrum
 			auto rgb_dict = item.second.cast<py::dict>();
 			parse_rgb(pgmr, prop, rgb_dict, within_emitter, within_spectrum);
@@ -251,38 +259,9 @@ void create_properties(PluginManager &pgmr, Properties &prop, py::dict &dict, bo
 			auto spec_dict = item.second.cast<py::dict>();
 			parse_spectrum(pgmr, prop, spec_dict, within_emitter);
 
-		} else if(key.compare("to_world") == 0) {
-		  	prop.set_transform(key, item.second.cast<Properties::Transform4f>());
-		} else if(isinstance<py::bool_>(item.second)) {
-		  	prop.set_bool(key, item.second.cast<bool>());
-		} else if(isinstance<py::int_>(item.second)) {
-		  	prop.set_long(key, item.second.cast<int64_t>());
-		} else if(isinstance<py::float_>(item.second)) {
-		  	prop.set_float(key, item.second.cast<Properties::Float>());
-		} else if(isinstance<py::str>(item.second)) {
-		  	prop.set_string(key, item.second.cast<std::string>());
-		} else if(isinstance<Properties::Point3f>(item.second)) {
-		  	prop.set_point3f(key, item.second.cast<Properties::Point3f>());
-		} else if(isinstance<Properties::Vector3f>(item.second)) {
-		  	prop.set_vector3f(key, item.second.cast<Properties::Vector3f>());
 		} else {
-			// another plugin
-			bool nested_within_emitter = false, nested_within_spectrum = false;
-
-			std::string parent_class_name = key;
-			if(parent_class_name.compare("emitter") == 0)
-			  	nested_within_emitter = true;
-			if(parent_class_name.compare("rfilter") == 0)
-				parent_class_name = "reconstructionFilter";
-			// capitalize the first letter
-			parent_class_name[0] = std::toupper(parent_class_name[0]);
-			auto nested_dict = item.second.cast<py::dict>();
-
-			Properties nested_prop;
-			create_properties(pgmr, nested_prop, nested_dict, nested_within_emitter, nested_within_spectrum);
-			const Class *class_ = Class::for_name(parent_class_name, mitsuba::detail::get_variant<Float, Spectrum >());
-			auto obj = pgmr.create_object(nested_prop, class_);
-			prop.set_object(key, obj);
+			auto val = item.second.ptr();
+			set(key, val);
 		}
 	}
 }
