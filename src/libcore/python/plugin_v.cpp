@@ -15,13 +15,16 @@ NAMESPACE_BEGIN(plugin)
 NAMESPACE_BEGIN(detail)
 
 // Helper macro
-#define SET_PROP(Type, Setter)                                        \
-	if (strcmp(typeid(T).name(), typeid(Type).name()) == 0)           \
-		props.Setter(name, value);
-		return;
-#undef
+#define SET_PROP(Type, Setter)                                      \
+	if (strcmp(typeid(T).name(), typeid(Type).name()) == 0) {       \
+		props.Setter(name, value);									\
+		return;														\
+	}
+
 template <typename T>
 void set(Properties &props, const std::string &name, const T &value) {
+    MTS_PY_IMPORT_TYPES_DYNAMIC()
+
     SET_PROP(bool, set_bool)
     SET_PROP(int, set_int)
     SET_PROP(long, set_long)
@@ -246,7 +249,7 @@ void create_properties(PluginManager &pgmr, Properties &prop, py::dict &dict, bo
 			auto obj = pgmr.create_object(nested_prop, class_);
 			prop.set_object(key, obj);
 		} catch (...) {
-			throw std::runtime_error("only dict")
+			Throw("only dict");
 		} 
 
 		if(key.compare("rgb") == 0) {
