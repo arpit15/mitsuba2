@@ -17,7 +17,8 @@ NAMESPACE_BEGIN(detail)
 // Helper macro
 #define SET_PROP(Type, Setter)                                      \
 	if (strcmp(typeid(T).name(), typeid(Type).name()) == 0) {       \
-		props.Setter(name, value);									\
+		auto ptr = py::cast<Type>(value);								\
+		props.Setter(name, ptr);									\
 		return;														\
 	}
 
@@ -32,12 +33,12 @@ void set(Properties &props, const std::string &name, const T &value) {
     SET_PROP(Vector3f, set_vector3f)
     SET_PROP(Point3f, set_point3f)
     SET_PROP(Transform4f, set_transform)
-
+    SET_PROP(std::string, set_string)
+    
     // TODO: not sure about those two
     SET_PROP(ref<AnimatedTransform>, set_animated_transform)
     SET_PROP(ref<Object>, set_object)
-
-    SET_PROP(std::string, set_string)
+    
 }
 
 
@@ -225,46 +226,48 @@ void create_properties(PluginManager &pgmr, Properties &prop, py::dict &dict, bo
 	MTS_PY_IMPORT_TYPES()
 	// get type
 	auto it = dict.begin();
-	Assert( strcmp(it.first.cast<py::str>(), "type"), "First dict key should be str 'type'");
-	std::string parent_class_name = it.second.cast<py::str>();
+	Assert( strcmp(it->first.cast<py::str>(), "type"), "First dict key should be str 'type'");
+	std::string parent_class_name = it->second.cast<py::str>();
 	// iterate over next props
 	it++;
 	// check for 
-	for(auto item : it) {
-		std::string key = item.first.cast<std::string>();
-		// check if the val is dict
-		try {
-			auto nested_dict = item.second.cast<std::dict>();
-			bool nested_within_emitter = false, nested_within_spectrum = false;
-			std::string parent_class_name = key;
-			if(parent_class_name.compare("emitter") == 0)
-			  	nested_within_emitter = true;
-			if(parent_class_name.compare("rfilter") == 0)
-				parent_class_name = "reconstructionFilter";
-			// capitalize the first letter
-			parent_class_name[0] = std::toupper(parent_class_name[0]);
-			Properties nested_prop;
-			create_properties(pgmr, nested_prop, nested_dict, nested_within_emitter, nested_within_spectrum);
-			const Class *class_ = Class::for_name(parent_class_name, mitsuba::detail::get_variant<Float, Spectrum >());
-			auto obj = pgmr.create_object(nested_prop, class_);
-			prop.set_object(key, obj);
-		} catch (...) {
-			Throw("only dict");
-		} 
-
+	for(auto item = it; it != dict.end();) {
+		std::string key = item->first.cast<std::string>();
+		
 		if(key.compare("rgb") == 0) {
 			// parse spectrum
-			auto rgb_dict = item.second.cast<py::dict>();
+			auto rgb_dict = item->second.cast<py::dict>();
 			parse_rgb(pgmr, prop, rgb_dict, within_emitter, within_spectrum);
 
 		} else if(key.compare("spectrum") == 0) {
 			// parse spectrum
-			auto spec_dict = item.second.cast<py::dict>();
+			auto spec_dict = item->second.cast<py::dict>();
 			parse_spectrum(pgmr, prop, spec_dict, within_emitter);
 
 		} else {
-			auto val = item.second.ptr();
-			set(key, val);
+			auto val = item->second;
+			// set prop
+			set(prop, key, val);
+		
+			// check if the val is mitsuba dict
+			try {
+				auto nested_dict = item->second.cast<py::dict>();
+				bool nested_within_emitter = false, nested_within_spectrum = false;
+				std::string parent_class_name = key;
+				if(parent_class_name.compare("emitter") == 0)
+				  	nested_within_emitter = true;
+				if(parent_class_name.compare("rfilter") == 0)
+					parent_class_name = "reconstructionFilter";
+				// capitalize the first letter
+				parent_class_name[0] = std::toupper(parent_class_name[0]);
+				Properties nested_prop;
+				create_properties(pgmr, nested_prop, nested_dict, nested_within_emitter, nested_within_spectrum);
+				const Class *class_ = Class::for_name(parent_class_name, mitsuba::detail::get_variant<Float, Spectrum >());
+				auto obj = pgmr.create_object(nested_prop, class_);
+				prop.set_object(key, obj);
+			} catch (...) {
+				Throw("only dict");
+			} 
 		}
 	}
 }
@@ -281,7 +284,7 @@ MTS_PY_EXPORT(PluginManager) {
 		Properties prop;
 		Assert(dict.size() == 1);
 		auto it = dict.begin();
-		std::string parent_class_name = it.first;
+		std::string parent_class_name = it->first.cast<py::str>();
 		bool within_emitter = false, within_spectrum = false;
 		
 		if(parent_class_name.compare("emitter") == 0)
@@ -290,7 +293,7 @@ MTS_PY_EXPORT(PluginManager) {
 		  parent_class_name = "reconstructionFilter";
 		// capitalize the first letter
 		parent_class_name[0] = std::toupper(parent_class_name[0]);
-		auto nested_dict = it.second.cast<py::dict>();
+		auto nested_dict = it->second.cast<py::dict>();
 		
 		mitsuba::plugin::detail::create_properties(pgmr, prop, nested_dict, within_emitter, within_spectrum);
 	  	
