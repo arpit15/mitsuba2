@@ -37,8 +37,13 @@ pmgr = PluginManager.instance()
 # })
 # print(camera)
 
+
 # mesh = pmgr.create({
 #     "shape" : {
+#         "type" : "ply",
+#         "filename" : "resources/data/ply/teapot.ply"
+#     },
+#     "shape1" : {
 #         "type" : "ply",
 #         "filename" : "resources/data/ply/teapot.ply"
 #     }
@@ -65,14 +70,14 @@ pmgr = PluginManager.instance()
 primitive_shape = pmgr.create({
   "shape" : {
     "type" : "sphere",
-    "center" : Point3f(0, 0, -10),
+    # "center" : Point3f(0, 0, -10),
     "radius" : 10.0,
     "flip_normals" : False,
     "emitter" : {
       "type" : "area",
       "spectrum" : {
         "name" : "radiance",
-        "value" : 10
+        "value" : 10.0
       }
     }
   }

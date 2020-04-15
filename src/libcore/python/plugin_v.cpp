@@ -15,32 +15,12 @@ NAMESPACE_BEGIN(plugin)
 NAMESPACE_BEGIN(detail)
 
 // Helper macro
-#define SET_PROP(Type, Setter)                                      \
-	if (strcmp(typeid(T).name(), typeid(Type).name()) == 0) {       \
-		Type ptr = py::cast<Type>(value);								\
-		props.Setter(name, ptr);									\
-		return;														\
-	}
-
-template <typename T>
-void set(Properties &props, const std::string &name, const T &value) {
-    MTS_PY_IMPORT_TYPES_DYNAMIC()
-
-    SET_PROP(bool, set_bool)
-    SET_PROP(int, set_int)
-    SET_PROP(long, set_long)
-    SET_PROP(float, set_float)
-    // SET_PROP(Properties::Type::Vector3f, set_vector3f)
-    // SET_PROP(Point3f, set_point3f)
-    // SET_PROP(Transform4f, set_transform)
-    SET_PROP(std::string, set_string)
-
-    // TODO: not sure about those two
-    SET_PROP(ref<AnimatedTransform>, set_animated_transform)
-    SET_PROP(ref<Object>, set_object)
-    
-}
-
+#define SET_PROP(Type, Setter) 									\
+	if(isinstance<Type>(val)) {									\
+		Type tmp = val.cast<Type>();                            \
+        prop.Setter(key, tmp);                                  \
+        continue;												\
+    }
 
 using Float = float;
 
@@ -108,6 +88,9 @@ void parse_spectrum(PluginManager &pgmr, Properties &prop, py::dict &dict, bool 
 	  std::vector<Float> wavelengths, values;
 	  spectrum_from_file(filename, wavelengths, values);
 	} else if(key.compare("value") == 0) {
+	  if(has_filename)
+		Throw("'spectrum' requires one of \"value\" or \"filename\" attributes");
+	  
 	  has_value = true;
 	  if(isinstance<py::float_>(item.second) || isinstance<py::int_>(item.second)) {
 		is_constant = true;
@@ -226,40 +209,38 @@ void create_properties(PluginManager &pgmr, Properties &prop, py::dict &dict, bo
 	MTS_PY_IMPORT_TYPES()
 	// get type
 	auto it = dict.begin();
-	
-	auto key1 = it->first.cast<std::string>();
 
-	py::print("key ", key1);
-	if(key1.compare("type") != 0)
-		py::print("didn't obtain type ", key1);
+	if(it->first.cast<std::string>().compare("type") != 0)
+		Throw("First key should 'type'");
 
-	Assert( key.compare("type") == 0, "First dict key should be str 'type'");
+	// Assert( it->first.cast<std::string>().compare("type") == 0, "First dict key should be str 'type'");
 	
-	std::string parent_class_name = it->second.cast<py::str>();
+	std::string plugin_name = it->second.cast<std::string>();
+	// capitalize the first letter
+	plugin_name[0] = std::toupper(plugin_name[0]);
+	prop.set_plugin_name(plugin_name);
+	
 	// iterate over next props
 	it++;
 	// check for 
-	for(auto item = it; it != dict.end(); it++) {
-		std::string key = item->first.cast<std::string>();
-		
+	for(; it != dict.end(); it++) {
+		std::string key = it->first.cast<std::string>();
 		if(key.compare("rgb") == 0) {
 			// parse spectrum
-			auto rgb_dict = item->second.cast<py::dict>();
+			auto rgb_dict = it->second.cast<py::dict>();
 			parse_rgb(pgmr, prop, rgb_dict, within_emitter, within_spectrum);
 
 		} else if(key.compare("spectrum") == 0) {
 			// parse spectrum
-			auto spec_dict = item->second.cast<py::dict>();
+			auto spec_dict = it->second.cast<py::dict>();
 			parse_spectrum(pgmr, prop, spec_dict, within_emitter);
 
 		} else {
-			auto val = item->second;
-			// set prop
-			set(prop, key, val);
-		
+			auto val = it->second;
+			
 			// check if the val is mitsuba dict
 			try {
-				auto nested_dict = item->second.cast<py::dict>();
+				auto nested_dict = val.cast<py::dict>();
 				bool nested_within_emitter = false, nested_within_spectrum = false;
 				std::string parent_class_name = key;
 				if(parent_class_name.compare("emitter") == 0)
@@ -273,9 +254,19 @@ void create_properties(PluginManager &pgmr, Properties &prop, py::dict &dict, bo
 				const Class *class_ = Class::for_name(parent_class_name, mitsuba::detail::get_variant<Float, Spectrum >());
 				auto obj = pgmr.create_object(nested_prop, class_);
 				prop.set_object(key, obj);
-			} catch (...) {
-				Throw("only dict");
-			} 
+				continue;
+			} catch (...) {} 
+
+			// set prop
+			SET_PROP(bool, set_bool)
+			SET_PROP(py::float_, set_float)
+			SET_PROP(int64_t, set_long)
+			SET_PROP(std::string, set_string)
+			SET_PROP(Properties::Vector3f, set_vector3f)
+			SET_PROP(Properties::Point3f, set_point3f)
+			SET_PROP(Properties::Transform4f, set_transform)
+			SET_PROP(ref<AnimatedTransform>, set_animated_transform)
+			SET_PROP(ref<Object>, set_object)
 		}
 	}
 }
@@ -290,7 +281,10 @@ MTS_PY_EXPORT(PluginManager) {
 	.def_static_method(PluginManager, instance, py::return_value_policy::reference)
 	.def("create", [](PluginManager &pgmr, const py::dict dict) {
 		Properties prop;
-		Assert(dict.size() == 1);
+		
+		if(dict.size() != 1)
+			Throw("dict size should 1");
+		// Assert(dict.size() == 1);
 		auto it = dict.begin();
 		std::string parent_class_name = it->first.cast<py::str>();
 		bool within_emitter = false, within_spectrum = false;
