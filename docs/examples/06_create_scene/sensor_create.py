@@ -75,9 +75,11 @@ primitive_shape = pmgr.create({
     "flip_normals" : False,
     "emitter" : {
       "type" : "area",
-      "spectrum" : {
-        "name" : "radiance",
-        "value" : 10.0
+      # "spectrum" : {
+      #   "radiance" : "file.spd"#10.0 #"400:0.1, 700:0.2"
+      # }
+      "rgb" : {
+      "radiance" : Color3f(0.5, 0.2, 0.5) # [0.5, 0.2, 0.5]
       }
     }
   }
@@ -85,13 +87,38 @@ primitive_shape = pmgr.create({
 
 print(primitive_shape)
 print(primitive_shape.is_emitter())
+
+
+# Spectrum
+# spec = pmgr.create({
+#   "spectrum" : {
+#     "type" : "d65"
+#   }
+# })
+# print(spec)
+######
 ####
 
 # bsdf = pmgr.create({
 #   "bsdf" : {
-#     "type"
+#     "type" : "d65"
 #   }
-#   })
+# })
+
+# bsdf = pmgr.create({
+#   "bsdf" : {
+#     "type" : "blackbody",
+#     "temperature" : 5000
+#   }
+# })
+
+# bsdf = pmgr.create({
+#   "bsdf" : {
+#     "type" : "srgb_d65", #"srgb"
+#     "color" : Color3f(1,1,1)
+#   }
+# })
+
 # print(bsdf)
 # ##3
 # sampler = pmgr.create({

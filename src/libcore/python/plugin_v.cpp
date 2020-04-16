@@ -17,6 +17,7 @@ NAMESPACE_BEGIN(detail)
 // Helper macro
 #define SET_PROP(Type, Setter) 									\
 	if(isinstance<Type>(val)) {									\
+		py::print(val, " is casted into ", typeid(Type).name());\
 		Type tmp = val.cast<Type>();                            \
         prop.Setter(key, tmp);                                  \
         continue;												\
@@ -40,62 +41,61 @@ static Float stof(const std::string &s) {
 }
 
 void parse_rgb(PluginManager &pgmr, Properties &prop, py::dict &dict, bool within_emitter = false, bool within_spectrum = false) {
-  MTS_PY_IMPORT_TYPES()
-  Properties::Color3f col;
-  std::string rgb_name;
-  for(auto item : dict) {
-	std::string key = item.first.cast<std::string>();
-	if(key.compare("name") == 0) {
-	  rgb_name = item.second.cast<std::string>();
-	} else if(isinstance<Properties::Color3f>(item.second)) {
-	  col = item.second.cast<Properties::Color3f>();
-	} 
-  }
+  	MTS_PY_IMPORT_TYPES()
+  	Properties::Color3f col;
+  	if(dict.size() != 1)
+		Throw("Spectrum dict should be size 1");
 
-  if(!within_spectrum) {
-	bool is_ior = rgb_name == "eta" || rgb_name == "k" || rgb_name == "int_ior" ||
-				  rgb_name == "ext_ior";
-	Properties nested_prop(within_emitter? "srgb_d65" : "srgb");
-	nested_prop.set_color("color", col);
+	auto item = dict.begin();
 
-	if(!within_emitter && is_ior)
-	  nested_prop.set_bool("unbounded", true);
+	std::string key = item->first.cast<std::string>();
+	auto val = item->second;
 
-	ref<Object> obj = pgmr.create_object(nested_prop, 
-		Class::for_name("Texture", mitsuba::detail::get_variant<Float, Spectrum >()));
-	prop.set_object(rgb_name, obj);
-  } else {
-	prop.set_color("color", col);
-  }
+	SET_PROP(Properties::Color3f, set_color);
+	
+	// for(auto item : dict) {
+	// 	std::string key = item->first.cast<std::string>();
+	// 	if(key.compare("name") == 0) {
+	// 	  rgb_name = item->second.cast<std::string>();
+	// 	} else if(isinstance<Properties::Color3f>(item->second)) {
+	// 	  col = item->second.cast<Properties::Color3f>();
+	// 	} 
+	// 	}
+
+	// 	if(!within_spectrum) {
+	// 	bool is_ior = rgb_name == "eta" || rgb_name == "k" || rgb_name == "int_ior" ||
+	// 				  rgb_name == "ext_ior";
+	// 	Properties nested_prop(within_emitter? "srgb_d65" : "srgb");
+	// 	nested_prop.set_color("color", col);
+
+	// 	if(!within_emitter && is_ior)
+	// 	  nested_prop.set_bool("unbounded", true);
+
+	// 	ref<Object> obj = pgmr.create_object(nested_prop, 
+	// 		Class::for_name("Texture", mitsuba::detail::get_variant<Float, Spectrum >()));
+	// 	prop.set_object(rgb_name, obj);
+	// 	} else {
+	// 	prop.set_color("color", col);
+	// }
 }
 
 void parse_spectrum(PluginManager &pgmr, Properties &prop, py::dict &dict, bool within_emitter = false) {
-  MTS_PY_IMPORT_TYPES()
-  bool has_value = false, has_filename = false, is_constant = false;
-  std::string spec_name;
-  // for spectrum not constant
-  std::vector<Properties::Float> wavelengths, values;
-  const Class *tex_cls = Class::for_name("Texture", mitsuba::detail::get_variant<Float, Spectrum >());
-  for(auto item : dict) {
-	std::string key = item.first.cast<std::string>();
-	if(key.compare("name") == 0) {
-	  spec_name = item.second.cast<std::string>();
-	} else if(key.compare("filename") == 0) {
-	  if(has_value)
-		Throw("'spectrum' requires one of \"value\" or \"filename\" attributes");
-	  has_filename = true;
-	  std::string filename = item.second.cast<std::string>();
-	  std::vector<Float> wavelengths, values;
-	  spectrum_from_file(filename, wavelengths, values);
-	} else if(key.compare("value") == 0) {
-	  if(has_filename)
-		Throw("'spectrum' requires one of \"value\" or \"filename\" attributes");
-	  
-	  has_value = true;
-	  if(isinstance<py::float_>(item.second) || isinstance<py::int_>(item.second)) {
-		is_constant = true;
+	MTS_PY_IMPORT_TYPES()
+
+	// for spectrum not constant
+	std::vector<Properties::Float> wavelengths, values;
+	const Class *tex_cls = Class::for_name("Texture", mitsuba::detail::get_variant<Float, Spectrum >());
+
+	if(dict.size() != 1)
+		Throw("Spectrum dict should be size 1");
+
+	auto item = dict.begin();
+	std::string spec_name = item->first.cast<std::string>();
+
+	if(isinstance<py::float_>(item->second) || isinstance<py::int_>(item->second)) {
+		// constant
 		Properties nested_prop("uniform");
-		ScalarFloat val = item.second.cast<float>();
+		ScalarFloat val = item->second.cast<py::float_>();
 		if(within_emitter && is_spectral_v<Spectrum>) {
 		  nested_prop.set_plugin_name("d65");
 		  nested_prop.set_float("scale", val);
@@ -108,16 +108,14 @@ void parse_spectrum(PluginManager &pgmr, Properties &prop, py::dict &dict, bool 
 		  obj = expanded[0];
 		prop.set_object(spec_name, obj);
 		return;
-	  } else if(isinstance<py::str>(item.second)) {
-		is_constant = false;
-		if(has_filename)
-		  Throw("'spectrum' requires one of \"value\" or \"filename\" attributes");
-	  
-		if (has_value) {
-		  std::vector<std::string> tokens = string::tokenize(item.second.cast<std::string>());
-
-		  for (const std::string &token : tokens) {
-			std::vector<std::string> pair = string::tokenize(token, ":");
+	} else {
+		std::vector<std::string> tokens = string::tokenize(item->second.cast<std::string>());
+		if(1 == tokens.size()) {
+			// is filename
+			std::string filename = item->second.cast<std::string>();
+			spectrum_from_file(filename, wavelengths, values);
+		} else {
+			std::vector<std::string> pair = string::tokenize(item->second.cast<std::string>(), ":");
 			if (pair.size() != 2)
 				Throw("invalid spectrum (expected wavelength:value pairs)");
 
@@ -126,27 +124,24 @@ void parse_spectrum(PluginManager &pgmr, Properties &prop, py::dict &dict, bool 
 				wavelength = mitsuba::plugin::detail::stof(pair[0]);
 				value = mitsuba::plugin::detail::stof(pair[1]);
 			} catch (...) {
-				Throw("could not parse wavelength:value pair: \"%s\"", token);
+				Throw("could not parse wavelength:value pair: \"%s\"", tokens);
 			}
 
 			wavelengths.push_back(wavelength);
 			values.push_back(value);
-		  }
 		}
-	  }
 	}
-  }
 
-  // scale and create
-  Properties::Float unit_conversion = 1.f;
-  if(within_emitter || !is_spectral_v<Spectrum>)
+	// scale and create
+	Properties::Float unit_conversion = 1.f;
+	if(within_emitter || !is_spectral_v<Spectrum>)
 	unit_conversion = MTS_CIE_Y_NORMALIZATION;
 
-  /* Detect whether wavelengths are regularly sampled and potentially
+	/* Detect whether wavelengths are regularly sampled and potentially
 	 apply the conversion factor. */
-  bool is_regular = true;
-  Properties::Float interval = 0.f;
-  for (size_t n = 0; n < wavelengths.size(); ++n) {
+	bool is_regular = true;
+	Properties::Float interval = 0.f;
+	for (size_t n = 0; n < wavelengths.size(); ++n) {
 	values[n] *= unit_conversion;
 
 	if (n <= 0)
@@ -159,26 +154,26 @@ void parse_spectrum(PluginManager &pgmr, Properties &prop, py::dict &dict, bool 
 		interval = distance;
 	else if (std::abs(distance - interval) > math::Epsilon<Float>)
 		is_regular = false;
-  }
+	}
 
-  Properties nested_prop;
-  if(is_regular) {
+	Properties nested_prop;
+	if(is_regular) {
 	nested_prop.set_plugin_name("regular");
 	nested_prop.set_long("size", wavelengths.size());
 	nested_prop.set_float("lambda_min", wavelengths.front());
 	nested_prop.set_float("lambda_max", wavelengths.back());
 	nested_prop.set_pointer("values", values.data());
-  } else {
+	} else {
 	nested_prop.set_plugin_name("irregular");
 	nested_prop.set_long("size", wavelengths.size());
 	nested_prop.set_pointer("wavelengths", wavelengths.data());
 	nested_prop.set_pointer("values", values.data());
-  }
+	}
 
-  ref<Object> obj = pgmr.create_object(nested_prop, tex_cls);
+	ref<Object> obj = pgmr.create_object(nested_prop, tex_cls);
 
-  // In non-spectral mode, pre-integrate against the CIE matching curves
-  if (is_spectral_v<Spectrum>) {
+	// In non-spectral mode, pre-integrate against the CIE matching curves
+	if (is_spectral_v<Spectrum>) {
 
 	/// Spectral IOR values are unbounded and require special handling
 	bool is_ior = spec_name == "eta" || spec_name == "k" || spec_name == "int_ior" ||
@@ -200,9 +195,9 @@ void parse_spectrum(PluginManager &pgmr, Properties &prop, py::dict &dict, bool 
 
 	obj = PluginManager::instance()->create_object(
 		props3, tex_cls);
-  }
+	}
 
-  prop.set_object(spec_name, obj);
+	prop.set_object(spec_name, obj);
 }
 
 void create_properties(PluginManager &pgmr, Properties &prop, py::dict &dict, bool within_emitter = false, bool within_spectrum = false) {
@@ -258,9 +253,9 @@ void create_properties(PluginManager &pgmr, Properties &prop, py::dict &dict, bo
 			} catch (...) {} 
 
 			// set prop
-			SET_PROP(bool, set_bool)
+			SET_PROP(py::bool_, set_bool)
 			SET_PROP(py::float_, set_float)
-			SET_PROP(int64_t, set_long)
+			SET_PROP(py::int_, set_long)
 			SET_PROP(std::string, set_string)
 			SET_PROP(Properties::Vector3f, set_vector3f)
 			SET_PROP(Properties::Point3f, set_point3f)
