@@ -48,35 +48,36 @@ void parse_rgb(PluginManager &pgmr, Properties &prop, py::dict &dict, bool withi
 
 	auto item = dict.begin();
 
-	std::string key = item->first.cast<std::string>();
+	std::string rgb_name = item->first.cast<std::string>();
 	auto val = item->second;
 
-	SET_PROP(Properties::Color3f, set_color);
-	
-	// for(auto item : dict) {
-	// 	std::string key = item->first.cast<std::string>();
-	// 	if(key.compare("name") == 0) {
-	// 	  rgb_name = item->second.cast<std::string>();
-	// 	} else if(isinstance<Properties::Color3f>(item->second)) {
-	// 	  col = item->second.cast<Properties::Color3f>();
-	// 	} 
-	// 	}
+	if(isinstance<Properties::Color3f>(val)) {
+		col = val.cast<Properties::Color3f>();
+	} else {
+		// expect a list
+		auto list = val.cast<py::list>();
+		if(list.size() != 3) 
+		  Throw("list size should 3");
+		col = Properties::Color3f(list[0].cast<Float>(),
+								list[1].cast<Float>(),
+								list[2].cast<Float>());
+	}
 
-	// 	if(!within_spectrum) {
-	// 	bool is_ior = rgb_name == "eta" || rgb_name == "k" || rgb_name == "int_ior" ||
-	// 				  rgb_name == "ext_ior";
-	// 	Properties nested_prop(within_emitter? "srgb_d65" : "srgb");
-	// 	nested_prop.set_color("color", col);
+	if(!within_spectrum) {
+		bool is_ior = rgb_name == "eta" || rgb_name == "k" || rgb_name == "int_ior" ||
+					  rgb_name == "ext_ior";
+		Properties nested_prop(within_emitter? "srgb_d65" : "srgb");
+		nested_prop.set_color("color", col);
 
-	// 	if(!within_emitter && is_ior)
-	// 	  nested_prop.set_bool("unbounded", true);
+		if(!within_emitter && is_ior)
+		  nested_prop.set_bool("unbounded", true);
 
-	// 	ref<Object> obj = pgmr.create_object(nested_prop, 
-	// 		Class::for_name("Texture", mitsuba::detail::get_variant<Float, Spectrum >()));
-	// 	prop.set_object(rgb_name, obj);
-	// 	} else {
-	// 	prop.set_color("color", col);
-	// }
+		ref<Object> obj = pgmr.create_object(nested_prop, 
+			Class::for_name("Texture", mitsuba::detail::get_variant<Float, Spectrum >()));
+		prop.set_object(rgb_name, obj);
+	} else {
+		prop.set_color("color", col);
+	}
 }
 
 void parse_spectrum(PluginManager &pgmr, Properties &prop, py::dict &dict, bool within_emitter = false) {

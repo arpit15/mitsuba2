@@ -79,7 +79,8 @@ primitive_shape = pmgr.create({
       #   "radiance" : "file.spd"#10.0 #"400:0.1, 700:0.2"
       # }
       "rgb" : {
-      "radiance" : Color3f(0.5, 0.2, 0.5) # [0.5, 0.2, 0.5]
+      "radiance" : [0.5, 0.2, 0.5]
+      # "radiance" : Color3f(0.5, 0.2, 0.5)
       }
     }
   }
