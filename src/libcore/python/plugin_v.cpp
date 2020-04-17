@@ -42,26 +42,14 @@ static Float stof(const std::string &s) {
 
 void parse_rgb(PluginManager &pgmr, Properties &prop, py::dict &dict, bool within_emitter = false, bool within_spectrum = false) {
   	MTS_PY_IMPORT_TYPES()
-  	Properties::Color3f col;
+  	
   	if(dict.size() != 1)
 		Throw("Spectrum dict should be size 1");
 
 	auto item = dict.begin();
 
 	std::string rgb_name = item->first.cast<std::string>();
-	auto val = item->second;
-
-	if(isinstance<Properties::Color3f>(val)) {
-		col = val.cast<Properties::Color3f>();
-	} else {
-		// expect a list
-		auto list = val.cast<py::list>();
-		if(list.size() != 3) 
-		  Throw("list size should 3");
-		col = Properties::Color3f(list[0].cast<Float>(),
-								list[1].cast<Float>(),
-								list[2].cast<Float>());
-	}
+	Properties::Color3f col = item->second.cast<Properties::Color3f>();
 
 	if(!within_spectrum) {
 		bool is_ior = rgb_name == "eta" || rgb_name == "k" || rgb_name == "int_ior" ||
@@ -116,20 +104,22 @@ void parse_spectrum(PluginManager &pgmr, Properties &prop, py::dict &dict, bool 
 			std::string filename = item->second.cast<std::string>();
 			spectrum_from_file(filename, wavelengths, values);
 		} else {
-			std::vector<std::string> pair = string::tokenize(item->second.cast<std::string>(), ":");
-			if (pair.size() != 2)
-				Throw("invalid spectrum (expected wavelength:value pairs)");
+			for (const std::string &token : tokens) {
+				std::vector<std::string> pair = string::tokenize(token, ":");
+				if (pair.size() != 2)
+					Throw("invalid spectrum (expected wavelength:value pairs)");
 
-			Properties::Float wavelength, value;
-			try {
-				wavelength = mitsuba::plugin::detail::stof(pair[0]);
-				value = mitsuba::plugin::detail::stof(pair[1]);
-			} catch (...) {
-				Throw("could not parse wavelength:value pair: \"%s\"", tokens);
+				Properties::Float wavelength, value;
+				try {
+					wavelength = mitsuba::plugin::detail::stof(pair[0]);
+					value = mitsuba::plugin::detail::stof(pair[1]);
+				} catch (...) {
+					Throw("could not parse wavelength:value pair: \"%s\"", tokens);
+				}
+
+				wavelengths.push_back(wavelength);
+				values.push_back(value);
 			}
-
-			wavelengths.push_back(wavelength);
-			values.push_back(value);
 		}
 	}
 

@@ -67,27 +67,27 @@ pmgr = PluginManager.instance()
 # print(point_emitter)
 
 # check area emitters
-primitive_shape = pmgr.create({
-  "shape" : {
-    "type" : "sphere",
-    # "center" : Point3f(0, 0, -10),
-    "radius" : 10.0,
-    "flip_normals" : False,
-    "emitter" : {
-      "type" : "area",
-      # "spectrum" : {
-      #   "radiance" : "file.spd"#10.0 #"400:0.1, 700:0.2"
-      # }
-      "rgb" : {
-      "radiance" : [0.5, 0.2, 0.5]
-      # "radiance" : Color3f(0.5, 0.2, 0.5)
-      }
-    }
-  }
-})
+# primitive_shape = pmgr.create({
+#   "shape" : {
+#     "type" : "sphere",
+#     # "center" : Point3f(0, 0, -10),
+#     "radius" : 10.0,
+#     "flip_normals" : False,
+#     "emitter" : {
+#       "type" : "area",
+#       # "spectrum" : {
+#       #   "radiance" : "file.spd"#10.0 #"400:0.1, 700:0.2"
+#       # }
+#       "rgb" : {
+#       "radiance" : [0.5, 0.2, 0.5]
+#       # "radiance" : Color3f(0.5, 0.2, 0.5)
+#       }
+#     }
+#   }
+# })
 
-print(primitive_shape)
-print(primitive_shape.is_emitter())
+# print(primitive_shape)
+# print(primitive_shape.is_emitter())
 
 
 # Spectrum
@@ -99,6 +99,44 @@ print(primitive_shape.is_emitter())
 # print(spec)
 ######
 ####
+
+bsdf = pmgr.create({
+  "bsdf" : {
+    "type" : "diffuse",
+    "spectrum" : {
+      "reflectance" : "400:0.1, 404:0.1"
+    }
+  }
+})
+
+# bsdf = pmgr.create({
+#   "bsdf" : {
+#     "type" : "diffuse",
+#     "texture" : {
+#       "type" : "bitmap",
+#       "name" : "reflectance",
+#       "filename" : "wood.jpg" 
+#     }
+#   }  
+# })
+
+# bsdf = pmgr.create({
+#   "bsdf" : {
+#     "type" : "dielectric",
+#     "int_ior" : "water",
+#     "ext_ior" : "air"
+#   }  
+# })
+
+# bsdf = pmgr.create({
+#   "bsdf" : {
+#     "type" : "plastic",
+#     "rgb" : {
+#       "diffuse_reflectance" : [0.1, 0.1, 0.1]
+#     },
+#     "int_ior" : 1.9
+#   }  
+# })
 
 # bsdf = pmgr.create({
 #   "bsdf" : {
@@ -120,7 +158,7 @@ print(primitive_shape.is_emitter())
 #   }
 # })
 
-# print(bsdf)
+print(bsdf)
 # ##3
 # sampler = pmgr.create({
 #   "sampler" : {
