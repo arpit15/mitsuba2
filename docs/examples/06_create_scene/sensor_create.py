@@ -5,10 +5,40 @@ from mitsuba.render import *
 from ipdb import set_trace
 
 pmgr = PluginManager.instance()
-# tex = Texture.D65(10)
-# print(type(tex))
-# set_trace()
 
+spec = pmgr.create({
+  "spectrum" : {
+    "type" : "d65"
+  }
+})
+
+# spec = pmgr.create({
+#   "spectrum" : {
+#     "type" : "blackbody",
+#     "temperature" : 5000.0
+#   }
+# })
+
+# spec = pmgr.create({
+#   "spectrum" : {
+#     "name" : "reflectance",
+#     "type" : "srgb_d65", #"srgb"
+#     "color" : Color3f(1,1,1)
+#   }
+# })
+
+# spec = pmgr.create({
+#   "spectrum" : {
+#     "name" : "reflectance",
+#     "type" : "srgb"
+#     "rgb" : {
+      #   "color" : Color3f(1,1,1)
+      # }
+#   }
+# })
+
+# print(spec)
+# ###
 # integrator = pmgr.create({
 #     "integrator": {
 #         "type": "path",
@@ -55,12 +85,10 @@ pmgr = PluginManager.instance()
 #         "type" : "point",
 #         "to_world" : Transform4f.translate([2,-6,4]),
 #         # "rgb" : {
-#         #     "name" : "intensity",
-#         #     "value" : [0.5, 0.2, 0.5] #10 #Texture.D65(10)
+#         "intensity" : [0.5, 0.2, 0.5] #10 #Texture.D65(10)
 #         # }
 #         "spectrum" : {
-#             "name" : "intensity",
-#             "value" : 10.0
+#             "intensity" : 10.0
 #         }
 #     }
 # })
@@ -100,25 +128,45 @@ pmgr = PluginManager.instance()
 ######
 ####
 
-bsdf = pmgr.create({
-  "bsdf" : {
-    "type" : "diffuse",
-    "spectrum" : {
-      "reflectance" : "400:0.1, 404:0.1"
-    }
-  }
-})
+# bsdf = pmgr.create({
+#   "bsdf" : {
+#     "type" : "diffuse",
+#     "spectrum" : {
+#       "reflectance" : "400:0.1, 404:0.1"
+#     }
+#   }
+# })
 
 # bsdf = pmgr.create({
 #   "bsdf" : {
 #     "type" : "diffuse",
 #     "texture" : {
-#       "type" : "bitmap",
 #       "name" : "reflectance",
-#       "filename" : "wood.jpg" 
+#       "type" : "bitmap",
+#       "filename" : "docs/images/logo_plain.png" 
 #     }
 #   }  
 # })
+
+# bsdf = pmgr.create({
+#   "bsdf" : {
+#     "type" : "diffuse",
+#     "texture" : {
+#       "name" : "reflectance",
+#       "type" : "checkerboard",
+#       "texture" : {
+#         "name" : "color0",
+#         "type" : "bitmap",
+#         "filename" : "docs/images/logo_plain.png"
+#       },
+#       # "color1" : 0.2
+#       "spectrum" : {
+#         "color1" : "resources/data/ior/Al.k.spd"
+#       }
+#     }
+#   }  
+# })
+
 
 # bsdf = pmgr.create({
 #   "bsdf" : {
@@ -138,27 +186,8 @@ bsdf = pmgr.create({
 #   }  
 # })
 
-# bsdf = pmgr.create({
-#   "bsdf" : {
-#     "type" : "d65"
-#   }
-# })
 
-# bsdf = pmgr.create({
-#   "bsdf" : {
-#     "type" : "blackbody",
-#     "temperature" : 5000
-#   }
-# })
-
-# bsdf = pmgr.create({
-#   "bsdf" : {
-#     "type" : "srgb_d65", #"srgb"
-#     "color" : Color3f(1,1,1)
-#   }
-# })
-
-print(bsdf)
+# print(bsdf)
 # ##3
 # sampler = pmgr.create({
 #   "sampler" : {
@@ -179,4 +208,9 @@ print(bsdf)
 # })
 # print(film)
 
-# set_trace()
+# scene
+# scene = pmgr.create({
+#   "scene" : {
+#   }  
+# })
+# print(scene)
