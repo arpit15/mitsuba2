@@ -6,6 +6,13 @@
 #include <mitsuba/render/film.h>
 #include <mitsuba/render/fwd.h>
 #include <mitsuba/render/imageblock.h>
+#include <map>
+
+#include <ImfTiledOutputFile.h>
+#include <ImfChannelList.h>
+#include <ImfStringAttribute.h>
+#include <ImfFrameBuffer.h>
+#include <ImfStandardAttributes.h>
 
 NAMESPACE_BEGIN(mitsuba)
 
@@ -53,27 +60,27 @@ public:
             props.string("pixel_format", "rgba"));
         std::string component_format = string::to_lower(
             props.string("component_format", "float16"));
-	m_block_size = props.float32("block_size", 32);
+	m_block_size = props.float_("block_size", 32);
 
         m_dest_file = props.string("filename", "");
 
         if (pixel_format == "luminance" || is_monochromatic_v<Spectrum>) {
-            m_pixel_format = Bitmap::PixelFormat::Y;
+            m_pixel_formats.push_back(Bitmap::PixelFormat::Y);
             if (pixel_format != "luminance")
                 Log(Warn,
                     "Monochrome mode enabled, setting film output pixel format "
                     "to 'luminance' (was %s).",
                     pixel_format);
         } else if (pixel_format == "luminance_alpha")
-            m_pixel_format = Bitmap::PixelFormat::YA;
+            m_pixel_formats.push_back(Bitmap::PixelFormat::YA);
         else if (pixel_format == "rgb")
-            m_pixel_format = Bitmap::PixelFormat::RGB;
+            m_pixel_formats.push_back(Bitmap::PixelFormat::RGB);
         else if (pixel_format == "rgba")
-            m_pixel_format = Bitmap::PixelFormat::RGBA;
+            m_pixel_formats.push_back(Bitmap::PixelFormat::RGBA);
         else if (pixel_format == "xyz")
-            m_pixel_format = Bitmap::PixelFormat::XYZ;
+            m_pixel_formats.push_back(Bitmap::PixelFormat::XYZ);
         else if (pixel_format == "xyza")
-            m_pixel_format = Bitmap::PixelFormat::XYZA;
+            m_pixel_formats.push_back(Bitmap::PixelFormat::XYZA);
         else {
             Throw("The \"pixel_format\" parameter must either be equal to "
                   "\"luminance\", \"luminance_alpha\", \"rgb\", \"rgba\", "
@@ -102,20 +109,20 @@ public:
 
         Log(Info, "Commencing creation of a tiled EXR image at \"%s\" ..", m_dest_file.string().c_str());
         
-        Imf::Header header(m_size.x, m_size.y);
+        Imf::Header header(m_size.x(), m_size.y());
         header.setTileDescription(Imf::TileDescription(m_block_size, m_block_size, Imf::ONE_LEVEL));
         header.insert("generated-by", Imf::StringAttribute("Mitsuba version " MTS_VERSION));
 
-        if (m_pixelFormats.size() == 1) {
+        if (m_pixel_formats.size() == 1) {
             /* Write a chromaticity tag when this is possible */
-            Bitmap::EPixelFormat pixelFormat = m_pixelFormats[0];
-            if (pixelFormat == Bitmap::EXYZ || pixelFormat == Bitmap::EXYZA) {
+            Bitmap::PixelFormat pixelFormat = m_pixel_formats[0];
+            if (pixelFormat == Bitmap::PixelFormat::XYZ || pixelFormat == Bitmap::PixelFormat::XYZA) {
                 Imf::addChromaticities(header, Imf::Chromaticities(
                     Imath::V2f(1.0f, 0.0f),
                     Imath::V2f(0.0f, 1.0f),
                     Imath::V2f(0.0f, 0.0f),
                     Imath::V2f(1.0f/3.0f, 1.0f/3.0f)));
-            } else if (pixelFormat == Bitmap::ERGB || pixelFormat == Bitmap::ERGBA) {
+            } else if (pixelFormat == Bitmap::PixelFormat::RGB || pixelFormat == Bitmap::PixelFormat::RGBA) {
                 Imf::addChromaticities(header, Imf::Chromaticities());
             }
         }
@@ -123,13 +130,13 @@ public:
         Imf::PixelType compType;
         size_t compStride;
 
-        if (m_componentFormat == Bitmap::EFloat16) {
+        if (m_component_format == Struct::Type::Float16) {
             compType = Imf::HALF;
             compStride = 2;
-        } else if (m_componentFormat == Bitmap::EFloat32) {
+        } else if (m_component_format == Struct::Type::Float32) {
             compType = Imf::FLOAT;
             compStride = 4;
-        } else if (m_componentFormat == Bitmap::EUInt32) {
+        } else if (m_component_format == Struct::Type::UInt32) {
             compType = Imf::UINT;
             compStride = 4;
         } else {
@@ -139,31 +146,31 @@ public:
         }
 
         Imf::ChannelList &channels = header.channels();
-        for (size_t i=0; i<m_channelNames.size(); ++i)
-            channels.insert(m_channelNames[i].c_str(), Imf::Channel(compType));
+        for (size_t i=0; i<m_channels.size(); ++i)
+            channels.insert(m_channels[i].c_str(), Imf::Channel(compType));
 
         m_output = new Imf::TiledOutputFile(m_dest_file.string().c_str(), header);
         m_frame_buffer = new Imf::FrameBuffer();
-        m_block_size = (int) blockSize;
-        m_blocksH = (m_size.x + blockSize - 1) / blockSize;
-        m_blocksV = (m_size.y + blockSize - 1) / blockSize;
+        m_block_size = (int) m_block_size;
+        m_blocksH = (m_size.x() + m_block_size - 1) / m_block_size;
+        m_blocksV = (m_size.y() + m_block_size - 1) / m_block_size;
 
-        m_pixel_stride = m_channelNames.size() * compStride;
+        m_pixel_stride = m_channels.size() * compStride;
         m_row_stride = m_pixel_stride * m_block_size;
 
-        if (m_pixelFormats.size() == 1) {
-            m_tile = new Bitmap(m_pixelFormats[0], m_componentFormat,
+        if (m_pixel_formats.size() == 1) {
+            m_tile = new Bitmap(m_pixel_formats[0], m_component_format,
                     Vector2i(m_block_size, m_block_size));
         } else {
-            m_tile = new Bitmap(Bitmap::EMultiChannel, m_componentFormat,
-                    Vector2i(m_block_size, m_block_size), (uint8_t) m_channelNames.size());
-            m_tile->setChannelNames(m_channelNames);
+            m_tile = new Bitmap(Bitmap::PixelFormat::MultiChannel, m_component_format,
+                    Vector2i(m_block_size, m_block_size), (uint8_t) m_channels.size());
+            // m_tile->setChannelNames(m_channels);
         }
 
-        char *ptr = (char *) m_tile->getUInt8Data();
+        char *ptr = (char *) m_tile->uint8_data();
 
-        for (size_t i=0; i<m_channelNames.size(); ++i) {
-            m_frame_buffer->insert(m_channelNames[i].c_str(),
+        for (size_t i=0; i<m_channels.size(); ++i) {
+            m_frame_buffer->insert(m_channels[i].c_str(),
                 Imf::Slice(compType, ptr, m_pixel_stride, m_row_stride));
             ptr += compStride;
         }
@@ -209,7 +216,7 @@ public:
         } else {
             copy1 = block->clone();
             copy1->inc_ref();
-            ++m_peakUsage;
+            ++m_peak_usage;
         }
 
         if (m_free_blocks.size() > 0) {
@@ -219,7 +226,7 @@ public:
         } else {
             copy2 = block->clone();
             copy2->inc_ref();
-            ++m_peakUsage;
+            ++m_peak_usage;
         }
 
         uint32_t idx = (uint32_t) x + (uint32_t) y * m_blocksH;
@@ -236,7 +243,7 @@ public:
             return;
 
         uint32_t idx = (uint32_t) x + (uint32_t) y * m_blocksH;
-        std::map<uint32_t, ImageBlock *>::iterator it = m_orig_blocks.find(idx);
+        auto it = m_orig_blocks.find(idx);
         if (it == m_orig_blocks.end())
             return;
 
@@ -303,17 +310,17 @@ public:
 
         /* Commit to disk */
         size_t ptrOffset = merged_block->offset().x() * m_pixel_stride +
-            merged_block->offset().y() * m_rowStride;
+            merged_block->offset().y() * m_row_stride;
 
-        for (Imf::FrameBuffer::Iterator it = m_frameBuffer->begin();
-            it != m_frameBuffer->end(); ++it)
+        for (Imf::FrameBuffer::Iterator it = m_frame_buffer->begin();
+            it != m_frame_buffer->end(); ++it)
             it.slice().base -= ptrOffset;
 
-        m_output->setFrameBuffer(*m_frameBuffer);
+        m_output->setFrameBuffer(*m_frame_buffer);
         m_output->writeTile(x, y);
 
-        for (Imf::FrameBuffer::Iterator it = m_frameBuffer->begin();
-            it != m_frameBuffer->end(); ++it)
+        for (Imf::FrameBuffer::Iterator it = m_frame_buffer->begin();
+            it != m_frame_buffer->end(); ++it)
             it.slice().base += ptrOffset;
 
         /* Release the block */
@@ -345,24 +352,20 @@ public:
             m_frame_buffer = NULL;
             m_tile = NULL;
 
-            //for (std::vector<ImageBlock *>::iterator it = m_free_blocks.begin();
-                //it != m_free_blocks.end(); ++it)
-             for(auto it : m_free_blocks)
-		   it->dec_ref();
+    
+            for(auto it : m_free_blocks)
+                it->dec_ref();
             m_free_blocks.clear();
 
-            //for (std::map<uint32_t, ImageBlock *>::iterator it = m_orig_blocks.begin();
-              //  it != m_orig_blocks.end(); ++it) {
-                for(auto it : m_orig_blocks) {
-		if (it.second)
+            for(auto it : m_orig_blocks) {
+                if (it.second)
                     it.second->dec_ref();
             }
             m_orig_blocks.clear();
 
-            for (std::map<uint32_t, ImageBlock *>::iterator it = m_merged_blocks.begin();
-                it != m_merged_blocks.end(); ++it) {
-                if ((*it).second)
-                    (*it).second->decRef();
+            for (auto it : m_merged_blocks) {
+                if (it.second)
+                    it.second->dec_ref();
             }
             m_merged_blocks.clear();
         }
@@ -382,7 +385,7 @@ public:
             << "  crop_size = " << m_crop_size   << "," << std::endl
             << "  crop_offset = " << m_crop_offset << "," << std::endl
             << "  filter = " << m_filter << "," << std::endl
-            << "  pixel_format = " << m_pixel_format << "," << std::endl
+            << "  pixel_format = " << m_pixel_formats << "," << std::endl
             << "  component_format = " << m_component_format << "," << std::endl
             << "  dest_file = \"" << m_dest_file << "\"" << std::endl
             << "]";
@@ -391,7 +394,7 @@ public:
 
     MTS_DECLARE_CLASS()
 protected:
-    Bitmap::PixelFormat m_pixel_format;
+    std::vector<Bitmap::PixelFormat> m_pixel_formats;
     Struct::Type m_component_format;
     fs::path m_dest_file;
     std::vector<std::string> m_channels;
