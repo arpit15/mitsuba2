@@ -334,11 +334,16 @@ public:
                  const ScalarVector2i &size,
                  const ScalarPoint2i  &taroffset,
                  Bitmap *target) const override {
-        Log(Error, "Not Implemented for TiledHDRFilm");
+        ENOKI_MARK_USED(source_offset);
+	ENOKI_MARK_USED(size);
+	ENOKI_MARK_USED(taroffset);
+	ENOKI_MARK_USED(target);
+	Log(Error, "Not Implemented for TiledHDRFilm");
         return false;
     }
 
     ref<Bitmap> bitmap(bool raw = false) override {
+	ENOKI_MARK_USED(raw);
         Log(Error, "Not Implemented for TiledHDRFilm");
      };
 
@@ -410,5 +415,5 @@ protected:
 };
 
 MTS_IMPLEMENT_CLASS_VARIANT(TiledHDRFilm, Film)
-MTS_EXPORT_PLUGIN(TiledHDRFilm, "HDR Film")
+MTS_EXPORT_PLUGIN(TiledHDRFilm, "Tiled HDR Film")
 NAMESPACE_END(mitsuba)
