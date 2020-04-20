@@ -193,17 +193,18 @@ public:
 
     /// Copy the contents of this image block to another one with the same configuration
     void copy_to(ImageBlock *copy) const {
-        size_t size = m_channel_count * hprod(m_size + 2 * m_border_size);
-        memcpy(copy->data(), m_data, size * sizeof(ScalarFloat));
-        copy->m_size = m_size;
+        //size_t size = m_channel_count * hprod(m_size + 2 * m_border_size);
+        //memcpy((uint8_t*)copy->data().managed().data(), (uint8_t*)m_data.managed().data(), size * sizeof(ScalarFloat));
+        copy->data() = m_data;
+	copy->m_size = m_size;
         copy->m_offset = m_offset;
-        copy->m_warn = m_warn;
+        copy->m_warn_negative = m_warn_negative;
     }
 
     /// Create a clone of the entire image block
     ref<ImageBlock> clone() const {
         ref<ImageBlock> clone = new ImageBlock(m_size, m_channel_count, m_filter, m_warn_negative);
-        copyTo(clone);
+        copy_to(clone);
         return clone;
     }
 
