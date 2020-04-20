@@ -53,6 +53,7 @@ public:
             props.string("pixel_format", "rgba"));
         std::string component_format = string::to_lower(
             props.string("component_format", "float16"));
+	m_block_size = props.float32("block_size", 32);
 
         m_dest_file = props.string("filename", "");
 
@@ -93,7 +94,7 @@ public:
         }
     }
 
-    void set_destination_file(const fs::path &dest_file, uint32_t block_size = 32) override {
+    void set_destination_file(const fs::path &dest_file) override {
         m_dest_file = dest_file;
         std::string extension = string::to_lower(m_dest_file.extension().string());
         if(extension != ".exr")
@@ -102,7 +103,7 @@ public:
         Log(Info, "Commencing creation of a tiled EXR image at \"%s\" ..", m_dest_file.string().c_str());
         
         Imf::Header header(m_size.x, m_size.y);
-        header.setTileDescription(Imf::TileDescription(block_size, block_size, Imf::ONE_LEVEL));
+        header.setTileDescription(Imf::TileDescription(m_block_size, m_block_size, Imf::ONE_LEVEL));
         header.insert("generated-by", Imf::StringAttribute("Mitsuba version " MTS_VERSION));
 
         if (m_pixelFormats.size() == 1) {
@@ -188,16 +189,16 @@ public:
     void put(const ImageBlock *block) override {
         Assert(m_output != NULL);
 
-        if ((block->offset().x % m_block_size) != 0 ||
-            (block->offset().y % m_block_size) != 0)
+        if ((block->offset().x() % m_block_size) != 0 ||
+            (block->offset().y() % m_block_size) != 0)
             Log(Error, "Encountered an unaligned block!");
 
-        if (block->get_size().x > m_block_size ||
-            block->get_size().y > m_block_size)
+        if (block->size().x() > m_block_size ||
+            block->size().y() > m_block_size)
             Log(Error, "Encountered an oversized block!");
 
-        int x = block->offset().x / (int) m_block_size;
-        int y = block->offset().y / (int) m_block_size;
+        int x = block->offset().x() / (int) m_block_size;
+        int y = block->offset().y() / (int) m_block_size;
 
         /* Create two copies: a clean one, and one that is used for accumulation */
         ref<ImageBlock> copy1, copy2;
@@ -301,8 +302,8 @@ public:
 
 
         /* Commit to disk */
-        size_t ptrOffset = merged_block->offset().x * m_pixel_stride +
-            merged_block->offset().y * m_rowStride;
+        size_t ptrOffset = merged_block->offset().x() * m_pixel_stride +
+            merged_block->offset().y() * m_rowStride;
 
         for (Imf::FrameBuffer::Iterator it = m_frameBuffer->begin();
             it != m_frameBuffer->end(); ++it)
@@ -344,15 +345,17 @@ public:
             m_frame_buffer = NULL;
             m_tile = NULL;
 
-            for (std::vector<ImageBlock *>::iterator it = m_free_blocks.begin();
-                it != m_free_blocks.end(); ++it)
-                (*it)->decRef();
+            //for (std::vector<ImageBlock *>::iterator it = m_free_blocks.begin();
+                //it != m_free_blocks.end(); ++it)
+             for(auto it : m_free_blocks)
+		   it->dec_ref();
             m_free_blocks.clear();
 
-            for (std::map<uint32_t, ImageBlock *>::iterator it = m_orig_blocks.begin();
-                it != m_orig_blocks.end(); ++it) {
-                if ((*it).second)
-                    (*it).second->decRef();
+            //for (std::map<uint32_t, ImageBlock *>::iterator it = m_orig_blocks.begin();
+              //  it != m_orig_blocks.end(); ++it) {
+                for(auto it : m_orig_blocks) {
+		if (it.second)
+                    it.second->dec_ref();
             }
             m_orig_blocks.clear();
 
