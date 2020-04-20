@@ -191,6 +191,22 @@ public:
     /// Return the underlying pixel buffer (const version)
     const DynamicBuffer<Float> &data() const { return m_data; }
 
+    /// Copy the contents of this image block to another one with the same configuration
+    void copy_to(ImageBlock *copy) const {
+        size_t size = m_channel_count * hprod(m_size + 2 * m_border_size);
+        memcpy(copy->data(), m_data, size * sizeof(ScalarFloat));
+        copy->m_size = m_size;
+        copy->m_offset = m_offset;
+        copy->m_warn = m_warn;
+    }
+
+    /// Create a clone of the entire image block
+    ref<ImageBlock> clone() const {
+        ref<ImageBlock> clone = new ImageBlock(m_size, m_channel_count, m_filter, m_warn_negative);
+        copyTo(clone);
+        return clone;
+    }
+
     //! @}
     // =============================================================
 
