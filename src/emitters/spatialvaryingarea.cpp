@@ -98,24 +98,32 @@ public:
         m_area_times_pi = m_shape->surface_area() * math::Pi<ScalarFloat>;
     }
 
-    inline Spectrum falloff_curve(const Vector3f &d, Wavelength wavelengths, Mask active) const {
-        SurfaceInteraction3f si = zero<SurfaceInteraction3f>();
-        si.wavelengths = wavelengths;
-        Spectrum result = m_radiance->eval(si, active);
+    // inline Float falloff_curve(const Vector3f &d, Wavelength wavelengths, Mask active) const {
+    //     SurfaceInteraction3f si = zero<SurfaceInteraction3f>();
+    //     si.wavelengths = wavelengths;
+    //     Float result(1);
 
-        Vector3f local_dir = normalize(d);
-        const Float cos_theta = local_dir.z();
+    //     Vector3f local_dir = normalize(d);
+    //     const Float cos_theta = local_dir.z();
 
-        if (m_texture->is_spatially_varying()) {
-            si.uv = Point2f(0.5f + 0.5f * local_dir.x() / (local_dir.z() * m_uv_factor),
-                            0.5f + 0.5f * local_dir.y() / (local_dir.z() * m_uv_factor));
-            result *= m_texture->eval(si, active);
-        }
+    //     // if (m_texture->is_spatially_varying()) {
+    //     //     si.uv = Point2f(0.5f + 0.5f * local_dir.x() / (local_dir.z() * m_uv_factor),
+    //     //                     0.5f + 0.5f * local_dir.y() / (local_dir.z() * m_uv_factor));
+    //     //     result *= m_texture->eval(si, active);
+    //     // }
 
-        auto beam_res = select(cos_theta >= m_cos_beam_width, result,
-                               result * ((m_cutoff_angle - acos(cos_theta)) * m_inv_transition_width));
+    //     auto beam_res = select(cos_theta >= m_cos_beam_width, result,
+    //                                 result * ((m_cutoff_angle - acos(cos_theta)) * m_inv_transition_width));
 
-        return select(cos_theta <= m_cos_cutoff_angle, Spectrum(0.0f), beam_res);
+    //     return select(cos_theta <= m_cos_cutoff_angle, Float(0.0f), beam_res);
+    // }
+
+    inline Float falloff_curve(const Float cos_theta) const {
+        Float result(1);
+        auto beam_res = select(cos_theta > m_cos_beam_width, result,
+                            result * ((m_cutoff_angle - acos(cos_theta)) * m_inv_transition_width));
+
+        return select(cos_theta < m_cos_cutoff_angle, Float(0.0f), beam_res);
     }
 
     std::pair<Ray3f, Spectrum> sample_ray(Float time, Float wavelength_sample,
@@ -136,7 +144,7 @@ public:
         auto [wavelengths, spec_weight] = m_radiance->sample(
             si, math::sample_shifted<Wavelength>(wavelength_sample), active);
 
-        spec_weight *= falloff_curve(local_dir, wavelengths, active);
+        // spec_weight *= falloff_curve(local_dir, wavelengths, active);
 
         return std::make_pair(
             Ray3f(ps.p, Frame3f(ps.n).to_world(local_dir), time, wavelengths),
@@ -157,9 +165,12 @@ public:
         SurfaceInteraction3f si(ds, it.wavelengths);
         Spectrum spec = m_radiance->eval(si, active) / ds.pdf;
 
-        auto trafo = m_world_transform->eval(it.time, active);
-        Vector3f local_d = trafo.inverse() * -ds.d;
-        spec *= falloff_curve(local_d, it.wavelengths, active);
+        // auto trafo = m_world_transform->eval(it.time, active);
+        // Vector3f local_d = trafo.inverse() * -ds.d;
+        // spec *= falloff_curve(local_d, it.wavelengths, active);
+
+        auto cos_theta = -dot(ds.d, ds.n);
+        spec *= falloff_curve(cos_theta);
 
         ds.object = this;
         return { ds, unpolarized<Spectrum>(spec) & active };
@@ -175,13 +186,16 @@ public:
     Spectrum eval(const SurfaceInteraction3f &si, Mask active) const override { 
         MTS_MASKED_FUNCTION(ProfilerPhase::EndpointEvaluate, active);
 
-        auto trafo = m_world_transform->eval(si.time, active);
-        Vector3f local_d = trafo.inverse() * si.wi;
+        // auto trafo = m_world_transform->eval(si.time, active);
+        // Vector3f local_d = trafo.inverse() * si.wi;
+
+        auto cos_theta = dot(si.wi, si.n);
 
         return select(
             Frame3f::cos_theta(si.wi) > 0.f,
             unpolarized<Spectrum>(m_radiance->eval(si, active))
-                * falloff_curve(local_d, si.wavelengths, active),
+                * falloff_curve(cos_theta),
+                // * falloff_curve(local_d, si.wavelengths, active),
             0.f
         );
     }
