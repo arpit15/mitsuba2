@@ -80,7 +80,8 @@ public:
         }
 
         m_quad_factor = props.float_("quad_factor", 2.0f);
-
+	m_blur_size = props.float_("blur_size", 0.1f);
+	
         m_cutoff_angle = props.float_("cutoff_angle", 20.0f);
         m_beam_width = props.float_("beam_width", m_cutoff_angle * 3.0f / 4.0f);
         m_cutoff_angle = deg_to_rad(m_cutoff_angle);
@@ -100,6 +101,15 @@ public:
         m_area_times_pi = m_shape->surface_area() * math::Pi<ScalarFloat>;
     }
 
+    Float smooth_profile(Float x) const {
+        Float res(0);
+        res = select(x >= m_blur_size && x <= Float(1) - m_blur_size, Float(1), res);
+        res = select(x < m_blur_size && x > Float(0), x / m_blur_size, res);
+        res = select(x > Float(1) - m_blur_size && x < Float(1),
+                     (1 - x) / m_blur_size, res);
+        return res;
+    }
+  
     // inline Float falloff_curve(const Vector3f &d, Wavelength wavelengths, Mask active) const {
     //     SurfaceInteraction3f si = zero<SurfaceInteraction3f>();
     //     si.wavelengths = wavelengths;
@@ -127,9 +137,10 @@ public:
 
         // return select(cos_theta < m_cos_cutoff_angle, Float(0.0f), beam_res);
 
-        Float angle = acos(cos_theta) * math::InvPi<Float> - 0.5f;
-        Float value = m_quad_factor*(1.f-pow(angle, 2.));
-        return value;
+        Float angle = acos(cos_theta) * math::InvPi<ScalarFloat> - 0.5f;
+        //Float value = m_quad_factor*(1.f-pow(angle, 2.f));
+	Float value = math::InvSqrtPi<ScalarFloat> * (1.f/m_quad_factor)*exp(- pow(angle/m_quad_factor, 2.f));
+	return value;
     }
 
     std::pair<Ray3f, Spectrum> sample_ray(Float time, Float wavelength_sample,
@@ -150,8 +161,10 @@ public:
         auto [wavelengths, spec_weight] = m_radiance->sample(
             si, math::sample_shifted<Wavelength>(wavelength_sample), active);
 
-        // spec_weight *= falloff_curve(local_dir, wavelengths, active);
+        spec_weight *= falloff_curve(local_dir.z());
+	spec_weight *= smooth_profile(ps.uv.x()) * smooth_profile(ps.uv.y());
 
+	
         return std::make_pair(
             Ray3f(ps.p, Frame3f(ps.n).to_world(local_dir), time, wavelengths),
             unpolarized<Spectrum>(spec_weight) * m_area_times_pi / pdf_dir
@@ -177,7 +190,8 @@ public:
 
         auto cos_theta = -dot(ds.d, ds.n);
         spec *= falloff_curve(cos_theta);
-
+	spec *= smooth_profile(ds.uv.x()) * smooth_profile(ds.uv.y());
+	
         ds.object = this;
         return { ds, unpolarized<Spectrum>(spec) & active };
     }
@@ -243,7 +257,7 @@ private:
     ref<Texture> m_texture;
     ScalarFloat m_beam_width, m_cutoff_angle, m_uv_factor;
     ScalarFloat m_cos_beam_width, m_cos_cutoff_angle, m_inv_transition_width;
-    ScalarFloat m_quad_factor;
+  ScalarFloat m_quad_factor, m_blur_size;
 };
 
 
