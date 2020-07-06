@@ -79,6 +79,8 @@ public:
             m_flags |= +EmitterFlags::SpatiallyVarying;
         }
 
+        m_quad_factor = props.float_("quad_factor", 2.0f);
+
         m_cutoff_angle = props.float_("cutoff_angle", 20.0f);
         m_beam_width = props.float_("beam_width", m_cutoff_angle * 3.0f / 4.0f);
         m_cutoff_angle = deg_to_rad(m_cutoff_angle);
@@ -119,11 +121,15 @@ public:
     // }
 
     inline Float falloff_curve(const Float cos_theta) const {
-        Float result(1);
-        auto beam_res = select(cos_theta > m_cos_beam_width, result,
-                            result * ((m_cutoff_angle - acos(cos_theta)) * m_inv_transition_width));
+        // Float result(1);
+        // auto beam_res = select(cos_theta > m_cos_beam_width, result,
+        //                     result * ((m_cutoff_angle - acos(cos_theta)) * m_inv_transition_width));
 
-        return select(cos_theta < m_cos_cutoff_angle, Float(0.0f), beam_res);
+        // return select(cos_theta < m_cos_cutoff_angle, Float(0.0f), beam_res);
+
+        Float angle = acos(cos_theta) * math::InvPi<Float> - 0.5f;
+        Float value = m_quad_factor*(1.f-pow(angle, 2.));
+        return value;
     }
 
     std::pair<Ray3f, Spectrum> sample_ray(Float time, Float wavelength_sample,
@@ -237,6 +243,7 @@ private:
     ref<Texture> m_texture;
     ScalarFloat m_beam_width, m_cutoff_angle, m_uv_factor;
     ScalarFloat m_cos_beam_width, m_cos_cutoff_angle, m_inv_transition_width;
+    ScalarFloat m_quad_factor;
 };
 
 
