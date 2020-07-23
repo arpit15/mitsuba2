@@ -200,7 +200,7 @@ public:
             // Sample from a Phong lobe centered around (0,0,1)
             Float sinAlpha = sqrt(1-pow(sample2.y(), 2.f*rcp(exponent+1.f))),
             cosAlpha = pow(sample2.y(), rcp(exponent+1.f)),
-            phi = (2.f * math::Pi<Float>) * sample2.x();
+            phi = math::TwoPi<Float> * sample2.x();
 
             Vector3f localDir = Vector3f(
                 sinAlpha * cos(phi),
@@ -225,7 +225,7 @@ public:
 
         result = eval(ctx, si, bs.wo, active); 
 
-        return { bs, select(bs.pdf, result/bs.pdf, zero<Spectrum>()) };
+        return { bs, select(bs.pdf>0.f, result/bs.pdf, zero<Spectrum>()) };
     }
 
     Spectrum eval(const BSDFContext &ctx, const SurfaceInteraction3f &si,
@@ -250,7 +250,7 @@ public:
             // Float exponent = m_exponent->eval(si, active).mean();
             Float exponent = m_exponent;
 
-            result = select(alpha, 
+            result = select(alpha>0.f, 
                 m_specular_reflectance->eval(si, active) * 
                     (exponent + 2.f) * math::InvTwoPi<Float> * pow(alpha, exponent) ,
                 0.f);
@@ -291,14 +291,14 @@ public:
             // Float exponent = m_exponent->eval(si, active).mean();
             Float exponent = m_exponent;
 
-            prob_specular = select(alpha, 
+            prob_specular = select(alpha>0.f, 
                 pow(alpha, exponent) * (exponent + 1.f) / math::TwoPi<Float>,
                 0.f);
         }
 
         if (has_diffuse && has_specular) 
             return m_specular_sampling_weight * prob_specular +
-                        (1-m_specular_sampling_weight)*prob_diffuse;
+                        (1.f-m_specular_sampling_weight)*prob_diffuse;
         else if (has_diffuse) 
             return prob_diffuse;
         else if (has_specular)
