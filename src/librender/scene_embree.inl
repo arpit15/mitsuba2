@@ -38,6 +38,14 @@ MTS_VARIANT void Scene<Float, Spectrum>::accel_init_cpu(const Properties &/*prop
     Log(Info, "Embree ready. (took %s)", util::time_string(timer.value()));
 }
 
+MTS_VARIANT void Scene<Float, Spectrum>::accel_parameters_changed_cpu() {
+    if constexpr (!is_cuda_array_v<Float>) {
+        for (Shape *shape : m_shapes)
+            rtcAttachGeometry((RTCScene)m_accel, shape->embree_geometry(__embree_device));
+        rtcCommitScene((RTCScene)m_accel);
+    }
+}
+
 MTS_VARIANT void Scene<Float, Spectrum>::accel_release_cpu() {
     rtcReleaseScene((RTCScene) m_accel);
 }

@@ -9,6 +9,19 @@ MTS_VARIANT void Scene<Float, Spectrum>::accel_init_cpu(const Properties &props)
     m_accel = kdtree;
 }
 
+MTS_VARIANT void Scene<Float, Spectrum>::accel_parameters_changed_cpu() {
+    if constexpr (!is_cuda_array_v<Float>) {
+        // recreate kdtree
+        accel_release_cpu();
+        ShapeKDTree *kdtree = new ShapeKDTree();
+        kdtree->inc_ref();
+        for (Shape *shape : m_shapes)
+            kdtree->add_shape(shape);
+        kdtree->build();
+        m_accel = kdtree;
+    }
+}
+
 MTS_VARIANT void Scene<Float, Spectrum>::accel_release_cpu() {
     ((ShapeKDTree *) m_accel)->dec_ref();
     m_accel = nullptr;
